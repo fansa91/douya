@@ -1,0 +1,31 @@
+name: douya
+description: "Douya — a guest-mode, read-only Douban client in Flutter (desktop + mobile)."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.7.0
+  crypto: ^3.0.6
+  # Image preview (c001apk's pair): photo_view gallery + cached_network_image.
+  photo_view: ^0.15.0
+  cached_network_image: ^3.4.0
+  # Video preview for Frodo trailers (mp4).
+  video_player: ^2.9.0
+  # Settings persistence (theme mode, search history).
+  shared_preferences: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png

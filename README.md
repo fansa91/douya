@@ -1,0 +1,177 @@
+# douya
+
+<img src="assets/logo.png" width="120" alt="douya logo：豆芽">
+
+一个访客只读的豆瓣客户端，用 Flutter 写，一套代码跑桌面和移动端。
+
+> 注意：这个 `douya` 是本项目用户定的名字、这里新写的 Flutter 访客只读实现，
+> 不是原来 Zhang Hai 的 Android 原生 Douya 项目，不要混淆。
+> 它也不是豆瓣官方客户端，LOGO 是 douya 自己的豆芽图形（见下），不是豆瓣官方商标。
+
+## 版本：从 0.1 开始，按 tag 走
+
+- `pubspec.yaml` 当前版本：`0.1.0+1`，对应首个发布版本 **v0.1**。
+- 版本规则（和 weiyue 同款做法）：`pubspec` 里只留 `0.1.0+1` 不动，
+  发布版本以 Git tag 为准，打 `v0.1` tag 即发布 v0.1，打 `v0.2` 即 v0.2。
+- 当前状态：**还没有建仓库、没有打 tag、没有发布**，v0.1 是起始版本号，不是已发布版本。
+  仓库建好后，第一个 tag 就应该是 `v0.1`。
+
+## LOGO 与 M3 风格
+
+- LOGO：`assets/logo.png`，绿色圆角方块上一颗发芽的豆子，代表“豆芽”。
+  配色沿用豆瓣绿 `#00B51D` 的风格，但图形是原创的豆芽，不是直接复制豆瓣官方 LOGO，
+  避免让人误以为这是官方客户端。
+- M3 风格：`lib/main.dart` 里 `useMaterial3: true`（亮色和深色主题都有），
+  种子色是豆瓣绿 `#00B51D`，背景是纸色 `#F7F5F0`，评分是琥珀色 `#E8A33D`。
+  组件用 M3 的 `NavigationBar`（手机底部）、`NavigationRail`（桌面左侧）、
+  M3 卡片圆角和 `surfaceContainerHighest` 占位色，不用旧版 Material 2 的 BottomNavigationBar。
+- 断点（代码已实现）：宽度 `<600` 走手机底部 Tab，`>=600` 走 NavigationRail，
+  `>=1024` 走加宽 Rail；桌面搜索框在顶部，带“访客模式”Chip。
+  更细的设计目标（内容最大宽、右侧辅助栏等）见 `../douban-guest-api/UI_DESIGN.md`，
+  代码里尚未全部落地，不要把设计稿当成已实现。
+
+## 样板图（不是真实截图）
+
+下面两张是按 UI 设计画的样板图，用来对齐布局，不是真机跑出来的截图。
+本机没有 Flutter SDK，真实截图要等你在有 Flutter 的机器上跑起来后再替换。
+
+![手机样板图：底部 NavigationBar、海报网格](docs/images/sample-mobile.png)
+
+![桌面样板图：左侧 NavigationRail、海报网格、右侧相关栏](docs/images/sample-desktop.png)
+
+## v0.1 目前已实现的功能
+
+以代码为准，不是设计稿：
+
+- **自适应外壳**：手机底部 4 个 Tab（发现 / 书影音 / 小组 / 我的），
+  桌面左侧 NavigationRail，搜索页是独立 push 页（不是 Tab）。
+- **假数据仓库（默认）**：`FakeDoubanRepository`，不需要 key、不联网就能看布局，
+  示例数据就是肖申克的救赎、红楼梦那几个已验证过的条目 id。
+- **真实 Frodo 客户端（结构已搭好）**：`DoubanClient.signedGet` / `signedGetList`，
+  HMAC-SHA1 签名（path 带 `/api/v2` 前缀、秒级 `_ts`、完整 Frodo UA），
+  凭证只经 `--dart-define` 传入，不写进代码。
+  真实客户端代码已接线的接口（尚未在 Flutter 真机上跑通过，见文末验证边界）：条目详情、短评、长评、剧照、预告片（详情的 `trailers` 字段，mp4）、同类推荐（裸数组解析）、
+  相关豆列、影人列表 / 详情 / 作品、用户主页、用户收藏、小组话题列表、话题详情 / 回复、
+  **搜索全套**：`/search/subjects`（分页 + 类型筛选）、`/search/suggestion`（联想词 + 联想条目）、
+  `/search/hots`（热搜）、`/search/content_tab`（帖子内容）、`/search/group_tab`（小组 + 话题）、`/search/user`（用户）。
+  综合 `/search` 访客 403，搜索绝不调它。
+- **搜索页（参考 c001apk 的搜索流程）**：空查询显示热搜 + 历史芯片（历史存 SharedPreferences，可开关、可一键清空，清空要确认），
+  输入 300ms 防抖后显示 Frodo 联想词 + 联想条目，回车后是 4 个 tab（条目 / 帖子 / 小组 / 用户），
+  条目 tab 支持类型筛选和滑到底部加载更多，小组和用户 tab 点进去是预填 id 的小组 / 用户页。
+  帖子内容和小组话题目前只读展示，没有详情页，点击不跳转。
+- **图片预览（参考 c001apk 的 ImageViewPage）**：剧照和海报点开是全屏画廊
+  （`lib/ui/image_preview_page.dart`，photo_view + cached_network_image），
+  顶部显示 `当前 / 总数`，可缩放（最大 covered × 8）、滑动切换，桌面左右键切换，长按菜单目前只有复制链接。
+  保存 / 分享还没接，需要 saver_gallery / share_plus + Android 权限，下一步再做。
+- **视频预览**：条目详情的预告片点开是 `lib/ui/video_preview_page.dart`（video_player），
+  有播放/暂停、进度条、点画面显示/隐藏控制条，播放中 3 秒无操作自动隐藏控制条。
+  预告片地址是详情接口实时返回的，不硬编码（Frodo 预告地址有时效）。
+- **设置页（参考 c001apk 的分类设置）**：外壳 AppBar 和桌面顶部都有设置入口，
+  手机按分类 push 详情页，桌面宽屏是左侧分类 + 右侧详情。分类只有 3 个：
+  外观（主题：跟随系统 / 浅色 / 深色，持久化）、搜索（历史开关、清空历史）、关于（版本、访客范围、图片/视频预览说明）。
+  没有为不存在的功能放占位开关。
+- **Rexxar（不用签名）**：近期热门已接通，推荐是混合卡片（豆列卡和条目要按 type 分支渲染，
+  代码里 `SubjectPosterCard` 已处理豆列 badge）。
+- **评分规则**：社区评分 0–10、个人评分 1–5 分开显示，不混算、不二次除 2。
+- **分页规则**：接口层以返回的 `total` 为准，代码里仓库接口都带 `start` / `count`。
+
+## v0.1 目前已实现的页面
+
+| 页面 | 文件 | 内容 |
+|---|---|---|
+| 发现（首页） | `lib/ui/home_page.dart` | 热映 / 热门等集合入口 |
+| 书影音（浏览） | `lib/ui/browse_page.dart` | 分类浏览 |
+| 搜索 | `lib/ui/search_page.dart` | 热搜 + 历史 + Frodo 联想 + 4 tab 结果（条目分页/类型筛选） |
+| 条目详情 | `lib/ui/subject_page.dart` | 手机 Tabs 版 / 桌面左右分栏版，含短评、长评、剧照、预告片、推荐、豆列、影人 |
+| 用户主页 | `lib/ui/user_page.dart` | 用户信息 + 收藏列表（按 type / status 分），支持搜索页预填 id 进入 |
+| 小组 | `lib/ui/group_page.dart` | 小组话题列表 + 话题详情页（含回复），支持搜索页预填 id 进入 |
+| 影人 | `lib/ui/celebrity_page.dart` | 影人详情 + 作品列表 |
+| 图片预览 | `lib/ui/image_preview_page.dart` | 全屏画廊、缩放、1/N、桌面左右键、长按复制链接 |
+| 视频预览 | `lib/ui/video_preview_page.dart` | 预告片播放、进度条、控制条自动隐藏 |
+| 设置 | `lib/ui/settings_page.dart` | 外观 / 搜索 / 关于 3 个分类，手机 push、桌面主从 |
+
+共用组件在 `lib/ui/widgets.dart`：海报卡、列表行、评分星、空状态、加载态。
+
+## v0.1 明确未实现 / 未验证（不要当成已做）
+
+- **搜索的帖子内容和小组话题没有详情页**：`content_tab` 的帖子和 `group_tab` 的话题
+  目前只读展示，点击不跳转；小组和用户本身可以点进预填 id 的页面。
+- **图片预览的保存 / 分享还没接**：长按菜单目前只有复制链接，
+  保存要 saver_gallery + 权限，分享要 share_plus，都还没加依赖。
+- **启动器图标还没接线**：`assets/logo.png` 只是资源和 README 用图，
+  还没有用 launcher icon 工具生成 Android / iOS / 桌面启动图标。
+- **访客版范围**：只读，不登录、不写标记、不关注、不点赞、不评论、不发动态、不看通知和豆邮。
+  `group/user/{id}/joined_groups` 在访客签名下实测返回 403，所以没有“我的小组”列表，
+  只有已知小组浏览。
+- **本机验证边界（重要）**：本机没有 Flutter / Dart SDK，所以这里没有跑过
+  `flutter pub get`、`flutter analyze`、`flutter test`、`flutter run`。
+  代码只做了人工的括号和导入自查，请在你有 Flutter 的机器上跑下面命令后再继续：
+
+```sh
+cd douya
+flutter pub get
+flutter analyze
+flutter run
+```
+
+## 发布（Release Actions）
+
+工作流在 `.github/workflows/release.yml`，按 weiyue 的 Flutter 做法改的，
+Flutter 版本固定 `3.47.7`，Java 17：
+
+- 触发：推送 `v*` tag，或手动触发（手动触发只构建、不发布，发布只在 tag 上跑）。
+- 流程：4 个平台并行构建（Android 先做 analyze 和签名校验），全部成功后才发布 GitHub Release
+  （prerelease，不是 draft），任何一个平台失败都不会发布。
+- 产物（共 6 个）：
+  - Android（正式签名）：`Douya-<tag>-<abi>.apk`，例如 `Douya-v0.1-arm64-v8a.apk`，
+    分架构一般是 arm64-v8a / armeabi-v7a / x86_64 三个
+  - iOS（**不签名**）：`Douya-<tag>-unsigned.ipa`，`flutter build ipa --release --no-codesign`
+  - macOS（**不签名**）：`Douya-<tag>-macos.dmg`，用 create-dmg 打包
+  - Windows（**不签名**）：`Douya-<tag>-windows-x64.zip`，解压即用
+- 不签名的意思要说清楚：iOS 的 unsigned IPA 不能直接在真机上安装，需要自行签名或侧载；
+  macOS 的未签名 DMG 打开时会触发 Gatekeeper，需要右键打开或在系统设置里放行；
+  Windows 的 zip 不是带签名的安装包，只是 Release 文件夹打包。
+  只有 Android 这一路是正式签名的，可以直接安装和覆盖升级。
+- 版本：`pubspec` 保持 `0.1.0+1` 不动，`--build-name` / `--build-number` 从 tag 和 run 号算，
+  例如 tag `v0.1` 对应 build-name `0.1.0`。
+
+打 tag 前必须先设好的仓库 Secrets（Settings > Secrets and variables > Actions），共 6 个：
+
+| Secret | 用途 | 缺了会怎样 |
+|---|---|---|
+| `ANDROID_KEYSTORE_BASE64` | keystore 文件 base64 | 直接失败，不 fallback |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 密码 | 直接失败，不 fallback |
+| `ANDROID_KEY_ALIAS` | keystore 别名 | 直接失败，不 fallback |
+| `ANDROID_KEY_PASSWORD` | key 密码 | 直接失败，不 fallback |
+| `DOUBAN_API_KEY` | Frodo 接口 key，进 `--dart-define` | 构建仍通过，但切真实仓库时会抛错 |
+| `DOUBAN_API_SECRET` | Frodo 签名 secret，进 `--dart-define` | 同上 |
+
+**打第一个 tag 前必须先补齐的前提（现在还没满足）：**
+
+1. 在有 Flutter 的机器上跑 `flutter create --platforms=android,ios,macos,windows .`
+   生成各平台工程并提交，其中 `android/app/build.gradle.kts` 要按 `key.properties` 读签名
+   （weiyue 同款写法），applicationId / namespace 和 iOS / macOS 的 bundle id
+   都要定成 douya 自己的，不要照抄 weiyue 的。
+   每个平台 job 的第一步都会先检查对应工程文件夹是否存在，缺了就直接报错，
+   不会走到后面才报一堆 Flutter 错。
+2. 给 douya 单独生成一个新 keystore（不要复用 xiaogou 的），把上面 4 个 ANDROID_* 填进新仓库的 Secrets。
+3. 仓库建好、代码推上去之后，再打 `v0.1` tag，顺序不能反：先设 Secrets、再打 tag，
+   否则第一次发布就会因签名缺失失败，而且不要用临时自签名顶上去，否则后续正式版没法直接升级覆盖。
+
+## 切换到真实接口
+
+真实接口凭证不要写进代码，不要提交到仓库。启动时用 `--dart-define` 传入：
+
+```sh
+flutter run \
+  --dart-define=DOUBAN_API_KEY=你的公开AppKey \
+  --dart-define=DOUBAN_API_SECRET=对应的签名密钥
+```
+
+然后把 `lib/main.dart` 里的仓库从 `FakeDoubanRepository()` 换成
+`RealDoubanRepository(DoubanClient())`。
+
+凭证来源：公开实现（douban-skill 的签名函数、Douya 的 FrodoService）
+里的 App 公共凭证，不要自己编，也不要把凭证提交到仓库。
+要进 CI 的话，值应放在仓库 Secrets 里（`DOUBAN_API_KEY` / `DOUBAN_API_SECRET`），
+再由工作流转成 `--dart-define`，不要写进 README 或代码。

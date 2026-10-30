@@ -1,0 +1,22 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android signing: never commit these, CI generates them from Secrets
+android/app/release.keystore
+android/key.properties
+*.keystore
+*.jks
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Media generation intermediates (not app assets)
+media-generation-*

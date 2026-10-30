@@ -1,0 +1,300 @@
+name: Release
+
+# douya 发布：推送 v* 标签或手动触发（手动触发只构建、不发布，发布只在 tag 上跑）
+# v0.1 范围：Android APK（分架构、正式签名）+ iOS IPA（不签名）+ macOS DMG（不签名）+ Windows ZIP（不签名），
+# 共 6 个产物。不签名意味着：iOS 不能直接在真机上安装（需自行签名/侧载），macOS 打开时会报 Gatekeeper，
+# Windows 只是解压即用的文件夹，不是带签名的安装包。
+# 版本规则：pubspec 保持 0.1.0+1 不动，发布版本以 tag 为准，例如 tag v0.1 即发布 v0.1。
+#
+# 打 tag 前必须先在仓库 Secrets 里设好下面 6 个，缺 Android 签名 4 个中的任何一个都会直接失败，
+# 绝不 fallback 成临时自签名（否则 v0.1 装了以后没法直接升级到正式签名的后续版本）：
+#   ANDROID_KEYSTORE_BASE64    keystore 文件的 base64 文本（本地：base64 -w0 你的.keystore）
+#   ANDROID_KEYSTORE_PASSWORD  keystore 密码
+#   ANDROID_KEY_ALIAS          生成 keystore 时的别名
+#   ANDROID_KEY_PASSWORD       key 密码
+#   DOUBAN_API_KEY             Frodo 接口 key（--dart-define 传入，不写进代码）
+#   DOUBAN_API_SECRET          Frodo 签名 secret（--dart-define 传入，不写进代码）
+# DOUBAN_* 为空时构建仍能通过（默认是假数据仓库），但切到真实仓库时会抛错，正式发布前应设好。
+#
+# 前置条件（本仓库目前还不满足，打 tag 前必须先补齐，否则 release run 会在第一步就失败）：
+#   1. 在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 生成各平台工程并提交，
+#      其中 android/app/build.gradle.kts 要按 key.properties 读签名（见 weiyue 同款写法）。
+#   2. android/ 工程的 applicationId / namespace 要定成 douya 自己的，不要照抄 weiyue 的；
+#      iOS / macOS 的 bundle id 也要定成 douya 自己的。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK (multi-arch, signed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Android project exists
+        run: |
+          if [ ! -d android ] || [ ! -f android/app/build.gradle.kts ]; then
+            echo "::error::android/ 工程缺失：请先在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 并提交各平台工程，再打 tag"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Analyze
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Check Android signing secrets
+        run: |
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            case "$v" in
+              ANDROID_KEYSTORE_BASE64) val="${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ;;
+              ANDROID_KEYSTORE_PASSWORD) val="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ;;
+              ANDROID_KEY_ALIAS) val="${{ secrets.ANDROID_KEY_ALIAS }}" ;;
+              ANDROID_KEY_PASSWORD) val="${{ secrets.ANDROID_KEY_PASSWORD }}" ;;
+            esac
+            if [ -z "$val" ]; then
+              echo "::error::$v 未设置：请先在仓库 Secrets 里设置 ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD"
+              exit 1
+            fi
+          done
+
+      - name: Prepare signing keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.keystore
+          EOF
+
+      - name: Resolve version from tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.1.0"; fi
+          IFS='.' read -ra P <<< "$V"; while [ ${#P[@]} -lt 3 ]; do P+=(0); done
+          echo "BUILD_NAME=${P[0]}.${P[1]}.${P[2]}" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
+
+      - name: Build APK (split per ABI)
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
+            --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+
+      - name: Rename APKs
+        run: |
+          mkdir -p dist
+          TAG="${RELEASE_TAG:-v0.1}"
+          for f in build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi=$(basename "$f" | sed -e 's/^app-//' -e 's/-release\.apk$//')
+            cp "$f" "dist/Douya-${TAG}-${abi}.apk"
+          done
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/*.apk
+
+  ios:
+    name: iOS IPA (unsigned, no codesign)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check iOS project exists
+        run: |
+          if [ ! -d ios ]; then
+            echo "::error::ios/ 工程缺失：请先在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 并提交各平台工程，再打 tag"
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve version from tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.1.0"; fi
+          IFS='.' read -ra P <<< "$V"; while [ ${#P[@]} -lt 3 ]; do P+=(0); done
+          echo "BUILD_NAME=${P[0]}.${P[1]}.${P[2]}" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
+
+      - run: flutter pub get
+      - name: Build IPA (unsigned)
+        run: |
+          flutter build ipa --release --no-codesign \
+            --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
+            --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist build/ios/ipa
+          TAG="${RELEASE_TAG:-v0.1}"
+          if ls build/ios/ipa/*.ipa 1>/dev/null 2>&1; then
+            cp "$(ls build/ios/ipa/*.ipa | head -1)" "dist/Douya-${TAG}-unsigned.ipa"
+          else
+            APP_PATH=$(find build/ios/archive -name "Runner.app" -type d 2>/dev/null | head -1)
+            if [ -z "$APP_PATH" ]; then
+              echo "No Runner.app found in archive" && exit 1
+            fi
+            rm -rf /tmp/ipapack && mkdir -p /tmp/ipapack/Payload
+            cp -R "$APP_PATH" /tmp/ipapack/Payload/
+            cd /tmp/ipapack && zip -qry "$OLDPWD/dist/Douya-${TAG}-unsigned.ipa" Payload
+          fi
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/*.ipa
+
+  macos:
+    name: macOS DMG (unsigned)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check macOS project exists
+        run: |
+          if [ ! -d macos ]; then
+            echo "::error::macos/ 工程缺失：请先在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 并提交各平台工程，再打 tag"
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve version from tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.1.0"; fi
+          IFS='.' read -ra P <<< "$V"; while [ ${#P[@]} -lt 3 ]; do P+=(0); done
+          echo "BUILD_NAME=${P[0]}.${P[1]}.${P[2]}" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_ENV"
+
+      - run: flutter pub get
+      - name: Build macOS (unsigned)
+        run: |
+          flutter build macos --release \
+            --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
+            --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+
+      - name: Create DMG (unsigned)
+        run: |
+          brew install create-dmg
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" -print -quit)
+          echo "App: $APP_PATH"
+          APP_NAME=$(basename "$APP_PATH" .app)
+          TAG="${RELEASE_TAG:-v0.1}"
+          mkdir -p dist
+          create-dmg \
+            --volname "douya" \
+            --window-pos 200 120 \
+            --window-size 640 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME" 175 120 \
+            --hide-extension "$APP_NAME" \
+            --app-drop-link 475 120 \
+            "dist/Douya-${TAG}-macos.dmg" \
+            "$APP_PATH"
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/*.dmg
+
+  windows:
+    name: Windows ZIP (unsigned)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Windows project exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows)) {
+            Write-Error "windows/ 工程缺失：请先在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 并提交各平台工程，再打 tag"
+            exit 1
+          }
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve version from tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $v = $Matches[1] } else { $v = '0.1.0' }
+          $p = $v.Split('.'); while ($p.Count -lt 3) { $p += '0' }
+          "BUILD_NAME=$($p -join '.')" | Out-File -Append $env:GITHUB_ENV
+          "BUILD_NUMBER=${{ github.run_number }}" | Out-File -Append $env:GITHUB_ENV
+
+      - run: flutter pub get
+      - name: Build Windows (unsigned)
+        run: |
+          flutter build windows --release --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') { $version = $Matches[1] } else { $version = '0.1' }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath "dist\Douya-v$version-windows-x64.zip"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/*.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: [android, ios, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          prerelease: true
