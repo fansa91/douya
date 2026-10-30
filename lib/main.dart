@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'api/douban_client.dart';
 import 'data/fake_repository.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
@@ -15,6 +14,7 @@ Future<void> main() async {
 /// Switch the repository here to go from UI skeleton to live data:
 ///   FakeDoubanRepository()  -> runs offline, no key needed
 ///   RealDoubanRepository(DoubanClient()) -> needs --dart-define keys
+///     (and re-adding: import 'api/douban_client.dart';)
 class DouyaApp extends StatelessWidget {
   const DouyaApp({super.key});
 
@@ -42,7 +42,7 @@ class DouyaApp extends StatelessWidget {
           useMaterial3: true,
         ),
         themeMode: SettingsStore.instance.themeMode,
-        home: AdaptiveScaffold(repository: repository),
+        home: const AdaptiveScaffold(repository: repository),
       ),
     );
   }

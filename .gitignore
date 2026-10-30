@@ -20,3 +20,9 @@ android/key.properties
 
 # Media generation intermediates (not app assets)
 media-generation-*
+
+# Generated plugin registrants: flutter build regenerates them, do not commit
+macos/Flutter/GeneratedPluginRegistrant.swift
+windows/flutter/generated_plugin_registrant.cc
+windows/flutter/generated_plugin_registrant.h
+windows/flutter/generated_plugins.cmake

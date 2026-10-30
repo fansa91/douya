@@ -35,7 +35,7 @@ Widget _trailerSection(BuildContext context, List<Trailer> trailers) {
                     width: 72,
                     height: 48,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.play_circle_outlined),
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.play_circle_outlined),
                   ),
                 ),
           title: Text(trailer.title.isNotEmpty ? trailer.title : '预告片'),
@@ -107,7 +107,7 @@ Widget _header(SubjectDetail detail) {
                   ? const Icon(Icons.book_outlined)
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(s.pic!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.book_outlined)),
+                      child: Image.network(s.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
                     ),
             ),
           ),
@@ -208,7 +208,7 @@ class _MobileDetail extends StatelessWidget {
                                 onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
                                 child: Hero(
                                   tag: p.url!,
-                                  child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.image_outlined)),
+                                  child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
                                 ),
                               );
                             },
@@ -256,7 +256,7 @@ class _DesktopDetail extends StatelessWidget {
                     onTap: () => _openImagePreview(context, [detail.subject.pic!], 0),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(detail.subject.pic!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.book_outlined)),
+                      child: Image.network(detail.subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -316,7 +316,7 @@ class _DesktopDetail extends StatelessWidget {
                           final index = urls.indexOf(p.url!);
                           return GestureDetector(
                             onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
-                            child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.image_outlined)),
+                            child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
                           );
                         },
                       );

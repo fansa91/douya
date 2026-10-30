@@ -392,8 +392,8 @@ class RealDoubanRepository implements DoubanRepository {
       _client.signedGet('/api/v2/group/topic/$topicId'),
       _client.signedGet('/api/v2/group/topic/$topicId/comments', {'start': 0, 'count': 20}),
     ]);
-    final detail = results[0] as Map<String, dynamic>;
-    final comments = results[1] as Map<String, dynamic>;
+    final detail = results[0];
+    final comments = results[1];
     return TopicDetail(
       topic: GroupTopic.fromJson(detail),
       content: (detail['content'] as String?) ?? '',
@@ -407,8 +407,8 @@ class RealDoubanRepository implements DoubanRepository {
       _client.signedGet('/api/v2/celebrity/$id'),
       _client.signedGet('/api/v2/celebrity/$id/works', {'start': 0, 'count': 20}),
     ]);
-    final detail = results[0] as Map<String, dynamic>;
-    final works = results[1] as Map<String, dynamic>;
+    final detail = results[0];
+    final works = results[1];
     return CelebrityDetail(
       celebrity: Celebrity(
         id: id,

@@ -1,6 +1,7 @@
 /// Shared models for douya. All parsers are tolerant: Frodo and Rexxar
 /// use different field names for the same idea (pic vs cover vs images),
 /// and some fields are absent on some types.
+library;
 
 class Rating {
   const Rating({required this.value, required this.max, this.count = 0});

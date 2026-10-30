@@ -47,7 +47,7 @@ class HomePage extends StatelessWidget {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: subjects.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      separatorBuilder: (context, index) => const SizedBox(width: 12),
                       itemBuilder: (_, i) => SizedBox(
                         width: 120,
                         child: SubjectPosterCard(

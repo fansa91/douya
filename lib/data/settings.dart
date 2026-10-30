@@ -72,7 +72,7 @@ class SettingsStore extends ChangeNotifier {
           ThemeMode.system => 'system',
         },
       );
-      await prefs.setInt(_seedColorKey, _seedColor.value);
+      await prefs.setInt(_seedColorKey, _seedColor.toARGB32());
       await prefs.setBool(_historyEnabledKey, _searchHistoryEnabled);
       await prefs.setStringList(_historyKey, _searchHistory);
     } catch (_) {

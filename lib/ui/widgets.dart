@@ -32,7 +32,7 @@ class SubjectPosterCard extends StatelessWidget {
                         subject.pic!,
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        errorBuilder: (_, _, _) => Center(
+                        errorBuilder: (context, error, stackTrace) => Center(
                           child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
                         ),
                       ),
@@ -76,7 +76,7 @@ class SubjectRow extends StatelessWidget {
             ? const Icon(Icons.book_outlined)
             : ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: Image.network(subject.pic!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.book_outlined)),
+                child: Image.network(subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
               ),
       ),
       title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),

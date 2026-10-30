@@ -98,19 +98,25 @@ class _SettingsDetail extends StatelessWidget {
             SettingsSection.appearance => [
               const Text('主题模式', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              for (final entry in [
-                (ThemeMode.system, '跟随系统'),
-                (ThemeMode.light, '浅色'),
-                (ThemeMode.dark, '深色'),
-              ])
-                RadioListTile<ThemeMode>(
-                  title: Text(entry.$2),
-                  value: entry.$1,
-                  groupValue: settings.themeMode,
-                  onChanged: (mode) {
-                    if (mode != null) settings.setThemeMode(mode);
-                  },
+              RadioGroup<ThemeMode>(
+                groupValue: settings.themeMode,
+                onChanged: (mode) {
+                  if (mode != null) settings.setThemeMode(mode);
+                },
+                child: Column(
+                  children: [
+                    for (final entry in [
+                      (ThemeMode.system, '跟随系统'),
+                      (ThemeMode.light, '浅色'),
+                      (ThemeMode.dark, '深色'),
+                    ])
+                      RadioListTile<ThemeMode>(
+                        title: Text(entry.$2),
+                        value: entry.$1,
+                      ),
+                  ],
                 ),
+              ),
               const SizedBox(height: 16),
               const Text('M3 主题色', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
