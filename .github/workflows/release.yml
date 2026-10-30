@@ -16,11 +16,16 @@ name: Release
 #   DOUBAN_API_SECRET          Frodo 签名 secret（--dart-define 传入，不写进代码）
 # DOUBAN_* 为空时构建仍能通过（默认是假数据仓库），但切到真实仓库时会抛错，正式发布前应设好。
 #
-# 前置条件（本仓库目前还不满足，打 tag 前必须先补齐，否则 release run 会在第一步就失败）：
-#   1. 在有 Flutter 的机器上跑 flutter create --platforms=android,ios,macos,windows . 生成各平台工程并提交，
-#      其中 android/app/build.gradle.kts 要按 key.properties 读签名（见 weiyue 同款写法）。
-#   2. android/ 工程的 applicationId / namespace 要定成 douya 自己的，不要照抄 weiyue 的；
-#      iOS / macOS 的 bundle id 也要定成 douya 自己的。
+# 平台工程（2026-10-31 已补齐，不再是打 tag 的前置 blocker）：
+#   android/、ios/、macos/、windows/ 已提交。注意：本机没有 Flutter SDK，
+#   它们不是在这台机器上跑 flutter create 生成的，而是从 weiyue 的同款模板
+#   改标识而来：applicationId / bundle id 统一为 com.douya.app（不要照抄 weiyue 的
+#   com.weiyue.app），weiyue 专属的 NowPlayingPlugin 已删，启动图标全部从 douya
+#   的 assets/logo.png 重新生成，生成的插件注册文件（macOS GeneratedPluginRegistrant、
+#   Windows generated_*）不提交、由 flutter build 时生成。首次 CI 即是平台工程
+#   的第一次真实验证，跑通前不要把平台工程说成已编译验证通过。
+#   android/app/build.gradle.kts 按 key.properties 读签名（weiyue 同款写法，
+#   本地无 key.properties 时回退 debug 签名；CI 在构建前先校验 Secrets，缺了直接失败）。
 
 on:
   push:

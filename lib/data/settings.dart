@@ -11,16 +11,30 @@ class SettingsStore extends ChangeNotifier {
   static final SettingsStore instance = SettingsStore._();
 
   static const _themeKey = 'theme_mode';
+  static const _seedColorKey = 'seed_color';
   static const _historyEnabledKey = 'search_history_enabled';
   static const _historyKey = 'search_history';
   static const maxHistory = 20;
 
+  /// M3 seed color presets. Default is Douban green; the rest are
+  /// standard M3-style seeds, not per-screen custom themes.
+  static const List<(Color, String)> seedPresets = [
+    (Color(0xFF00B51D), '豆瓣绿'),
+    (Color(0xFF6750A4), 'M3 紫'),
+    (Color(0xFF0061A4), '蓝'),
+    (Color(0xFF006A6A), '青绿'),
+    (Color(0xFFBF6900), '橙'),
+    (Color(0xFFBA1A1A), '红'),
+  ];
+
   ThemeMode _themeMode = ThemeMode.system;
+  Color _seedColor = seedPresets.first.$1;
   bool _searchHistoryEnabled = true;
   List<String> _searchHistory = const [];
   bool _loaded = false;
 
   ThemeMode get themeMode => _themeMode;
+  Color get seedColor => _seedColor;
   bool get searchHistoryEnabled => _searchHistoryEnabled;
   List<String> get searchHistory => _searchHistory;
   bool get loaded => _loaded;
@@ -34,6 +48,10 @@ class SettingsStore extends ChangeNotifier {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       };
+      final seedValue = prefs.getInt(_seedColorKey);
+      if (seedValue != null) {
+        _seedColor = Color(seedValue);
+      }
       _searchHistoryEnabled = prefs.getBool(_historyEnabledKey) ?? true;
       _searchHistory = prefs.getStringList(_historyKey) ?? const [];
     } catch (_) {
@@ -54,6 +72,7 @@ class SettingsStore extends ChangeNotifier {
           ThemeMode.system => 'system',
         },
       );
+      await prefs.setInt(_seedColorKey, _seedColor.value);
       await prefs.setBool(_historyEnabledKey, _searchHistoryEnabled);
       await prefs.setStringList(_historyKey, _searchHistory);
     } catch (_) {
@@ -64,6 +83,13 @@ class SettingsStore extends ChangeNotifier {
   void setThemeMode(ThemeMode mode) {
     if (mode == _themeMode) return;
     _themeMode = mode;
+    notifyListeners();
+    _save();
+  }
+
+  void setSeedColor(Color color) {
+    if (color == _seedColor) return;
+    _seedColor = color;
     notifyListeners();
     _save();
   }

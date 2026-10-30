@@ -8,7 +8,7 @@ import '../data/settings.dart';
 /// Only settings douya actually implements are listed here — no
 /// placeholder switches for features that do not exist yet.
 enum SettingsSection {
-  appearance('外观', '主题模式', Icons.palette_outlined),
+  appearance('外观', '主题模式、M3 主题色', Icons.palette_outlined),
   search('搜索', '搜索历史', Icons.search_outlined),
   about('关于', '版本与访客模式说明', Icons.info_outlined);
 
@@ -111,8 +111,37 @@ class _SettingsDetail extends StatelessWidget {
                     if (mode != null) settings.setThemeMode(mode);
                   },
                 ),
+              const SizedBox(height: 16),
+              const Text('M3 主题色', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('主色仍固定为豆瓣绿 #00B51D，纸张底色 #F7F5F0，见 README 的 M3 说明。'),
+              const Text('改的是 Material 3 的种子色，整个应用的配色都会跟着变，默认是豆瓣绿。'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                children: [
+                  for (final preset in SettingsStore.seedPresets)
+                    GestureDetector(
+                      onTap: () => settings.setSeedColor(preset.$1),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 22,
+                            backgroundColor: preset.$1,
+                            child: settings.seedColor == preset.$1
+                                ? const Icon(Icons.check, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(preset.$2, style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text('纸张底色仍固定为 #F7F5F0，评分仍为琥珀色，见 README 的 M3 说明。'),
             ],
             SettingsSection.search => [
               SwitchListTile(

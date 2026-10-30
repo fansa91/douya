@@ -22,7 +22,9 @@
   配色沿用豆瓣绿 `#00B51D` 的风格，但图形是原创的豆芽，不是直接复制豆瓣官方 LOGO，
   避免让人误以为这是官方客户端。
 - M3 风格：`lib/main.dart` 里 `useMaterial3: true`（亮色和深色主题都有），
-  种子色是豆瓣绿 `#00B51D`，背景是纸色 `#F7F5F0`，评分是琥珀色 `#E8A33D`。
+  种子色默认是豆瓣绿 `#00B51D`，背景是纸色 `#F7F5F0`，评分是琥珀色 `#E8A33D`。
+  种子色可以在设置页的“外观”里换（豆瓣绿 / M3 紫 / 蓝 / 青绿 / 橙 / 红 6 个预设，
+  存 SharedPreferences，改完整个应用配色跟着变）。
   组件用 M3 的 `NavigationBar`（手机底部）、`NavigationRail`（桌面左侧）、
   M3 卡片圆角和 `surfaceContainerHighest` 占位色，不用旧版 Material 2 的 BottomNavigationBar。
 - 断点（代码已实现）：宽度 `<600` 走手机底部 Tab，`>=600` 走 NavigationRail，
@@ -88,7 +90,7 @@
 | 影人 | `lib/ui/celebrity_page.dart` | 影人详情 + 作品列表 |
 | 图片预览 | `lib/ui/image_preview_page.dart` | 全屏画廊、缩放、1/N、桌面左右键、长按复制链接 |
 | 视频预览 | `lib/ui/video_preview_page.dart` | 预告片播放、进度条、控制条自动隐藏 |
-| 设置 | `lib/ui/settings_page.dart` | 外观 / 搜索 / 关于 3 个分类，手机 push、桌面主从 |
+| 设置 | `lib/ui/settings_page.dart` | 外观（主题模式 + M3 主题色） / 搜索 / 关于 3 个分类，手机 push、桌面主从 |
 
 共用组件在 `lib/ui/widgets.dart`：海报卡、列表行、评分星、空状态、加载态。
 
@@ -98,8 +100,9 @@
   目前只读展示，点击不跳转；小组和用户本身可以点进预填 id 的页面。
 - **图片预览的保存 / 分享还没接**：长按菜单目前只有复制链接，
   保存要 saver_gallery + 权限，分享要 share_plus，都还没加依赖。
-- **启动器图标还没接线**：`assets/logo.png` 只是资源和 README 用图，
-  还没有用 launcher icon 工具生成 Android / iOS / 桌面启动图标。
+- **启动器图标只是 logo 简单缩放**：四端启动图标已从 `assets/logo.png` 按各尺寸重做
+  （Android mipmap / 自适应前景、iOS AppIcon、macOS AppIcon、Windows ICO），
+  能装能认，但不是专门设计的自适应图标，后续可以再精修。
 - **访客版范围**：只读，不登录、不写标记、不关注、不点赞、不评论、不发动态、不看通知和豆邮。
   `group/user/{id}/joined_groups` 在访客签名下实测返回 403，所以没有“我的小组”列表，
   只有已知小组浏览。
@@ -146,16 +149,15 @@ Flutter 版本固定 `3.47.7`，Java 17：
 | `DOUBAN_API_KEY` | Frodo 接口 key，进 `--dart-define` | 构建仍通过，但切真实仓库时会抛错 |
 | `DOUBAN_API_SECRET` | Frodo 签名 secret，进 `--dart-define` | 同上 |
 
-**打第一个 tag 前必须先补齐的前提（现在还没满足）：**
+**打第一个 tag 前必须先补齐的前提（平台工程已补齐，剩下的是 Secrets）：**
 
-1. 在有 Flutter 的机器上跑 `flutter create --platforms=android,ios,macos,windows .`
-   生成各平台工程并提交，其中 `android/app/build.gradle.kts` 要按 `key.properties` 读签名
-   （weiyue 同款写法），applicationId / namespace 和 iOS / macOS 的 bundle id
-   都要定成 douya 自己的，不要照抄 weiyue 的。
-   每个平台 job 的第一步都会先检查对应工程文件夹是否存在，缺了就直接报错，
-   不会走到后面才报一堆 Flutter 错。
+1. 平台工程已提交：`android/`、`ios/`、`macos/`、`windows/`，标识统一为 `com.douya.app`，
+   显示名 `douya`，启动图标从 `assets/logo.png` 重做。
+   注意：本机没有 Flutter SDK，这些工程不是 `flutter create` 生成的，
+   是从 weiyue 模板改标识、删 weiyue 专属代码而来，首次 CI 即是第一次真实验证。
+   每个平台 job 的第一步仍会先检查对应工程文件夹是否存在，缺了就直接报错。
 2. 给 douya 单独生成一个新 keystore（不要复用 xiaogou 的），把上面 4 个 ANDROID_* 填进新仓库的 Secrets。
-3. 仓库建好、代码推上去之后，再打 `v0.1` tag，顺序不能反：先设 Secrets、再打 tag，
+3. 再打 `v0.1` tag，顺序不能反：先设 Secrets、再打 tag，
    否则第一次发布就会因签名缺失失败，而且不要用临时自签名顶上去，否则后续正式版没法直接升级覆盖。
 
 ## 切换到真实接口

@@ -28,7 +28,7 @@ class DouyaApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF00B51D),
+            seedColor: SettingsStore.instance.seedColor,
             brightness: Brightness.light,
           ),
           scaffoldBackgroundColor: const Color(0xFFF7F5F0),
@@ -36,7 +36,7 @@ class DouyaApp extends StatelessWidget {
         ),
         darkTheme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF00B51D),
+            seedColor: SettingsStore.instance.seedColor,
             brightness: Brightness.dark,
           ),
           useMaterial3: true,
