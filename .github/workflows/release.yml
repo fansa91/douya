@@ -293,7 +293,12 @@ jobs:
   windows:
     name: Windows ZIP (unsigned)
     needs: test
-    runs-on: windows-latest
+    # Pinned to windows-2022 on purpose (v0.2 fix): the windows-latest
+    # image's newer MSVC (VS 18 / 14.51) errors (C2338) on
+    # <experimental/coroutine> in permission_handler_windows, which
+    # v0.1's older toolchain still compiled. Do not move this back
+    # to windows-latest without re-checking that plugin's build.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
