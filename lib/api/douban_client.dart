@@ -728,10 +728,13 @@ class RealDoubanRepository implements DoubanRepository {
     ]);
     final detail = results[0];
     final comments = results[1];
+    final group = detail['group'] is Map<String, dynamic> ? detail['group'] as Map<String, dynamic> : null;
     return TopicDetail(
       topic: GroupTopic.fromJson(detail),
       content: (detail['content'] as String?) ?? '',
       comments: _parseList(comments['comments'], TopicComment.fromJson),
+      groupId: '${group?['id'] ?? ''}',
+      groupName: (group?['name'] as String?) ?? '',
     );
   }
 

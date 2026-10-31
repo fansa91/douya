@@ -937,9 +937,20 @@ class TopicDetail {
     required this.topic,
     this.content = '',
     this.comments = const [],
+    this.groupId = '',
+    this.groupName = '',
   });
 
   final GroupTopic topic;
   final String content;
   final List<TopicComment> comments;
+
+  /// The group this topic belongs to, from the detail response's
+  /// `group` object (every topic payload carries one: verified in
+  /// the APK's topic flow model and in a live detail sample,
+  /// 2026-10-31). Empty when the response carries none, and the
+  /// detail page then hides the group row instead of showing a
+  /// blank one.
+  final String groupId;
+  final String groupName;
 }

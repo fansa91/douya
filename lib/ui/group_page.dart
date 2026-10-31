@@ -368,6 +368,24 @@ class _GroupPageState extends State<GroupPage> {
   }
 }
 
+/// A group's topic browser as a pushed page (used by the topic
+/// detail's group row). GroupPage itself has no Scaffold because
+/// it normally lives in the shell's tab body.
+class GroupTopicsPage extends StatelessWidget {
+  const GroupTopicsPage({super.key, required this.repository, required this.groupId});
+
+  final DoubanRepository repository;
+  final String groupId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('小组话题')),
+      body: GroupPage(repository: repository, initialGroupId: groupId),
+    );
+  }
+}
+
 class TopicDetailPage extends StatelessWidget {
   const TopicDetailPage({super.key, required this.repository, required this.topicId});
 
@@ -412,6 +430,28 @@ class TopicDetailView extends StatelessWidget {
                     Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
+                    if (detail.groupName.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: detail.groupId.isEmpty
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => GroupTopicsPage(repository: repository, groupId: detail.groupId),
+                                  ),
+                                );
+                              },
+                        child: Row(
+                          children: [
+                            const Icon(Icons.group_outlined, size: 16),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(detail.groupName)),
+                            if (detail.groupId.isNotEmpty) const Icon(Icons.chevron_right, size: 16),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

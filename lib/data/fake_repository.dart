@@ -244,6 +244,8 @@ Future<TopicListResult> fetchGroupTopicsPaged(String groupId, String sort, {int 
 Future<TopicDetail> fetchTopic(String topicId) async {
 return const TopicDetail(
 topic: GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东'),
+groupId: '146409',
+groupName: '上海租房',
 content: '话题正文放在这里。访客版只读，不提供回复入口。',
 comments: [
 TopicComment(authorName: '路人', text: '请问还可以看房吗？', voteCount: 2),
