@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
+import '../data/settings.dart';
 import '../models/models.dart';
 import 'celebrity_page.dart';
 import 'image_preview_page.dart';
@@ -102,6 +103,9 @@ class SubjectPage extends StatelessWidget {
 
 Widget _header(SubjectDetail detail) {
   final s = detail.subject;
+  // Display follows the image-quality setting; the preview opened
+  // on tap always uses the parsed (large-first) URL.
+  final displayPic = subjectImageUrl(s, SettingsStore.instance.imageQuality);
   return Padding(
     padding: const EdgeInsets.all(16),
     child: Row(
@@ -114,11 +118,11 @@ Widget _header(SubjectDetail detail) {
               width: 110,
               height: 150,
               decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
-              child: s.pic == null
+              child: displayPic == null
                   ? const Icon(Icons.book_outlined)
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(s.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                      child: Image.network(displayPic, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
                     ),
             ),
           ),
@@ -472,13 +476,14 @@ class _MobileDetail extends StatelessWidget {
                             itemCount: detail.photos.length,
                             itemBuilder: (_, i) {
                               final p = detail.photos[i];
-                              if (p.url == null) return const Icon(Icons.image_outlined);
+                              final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
+                              if (displayUrl == null) return const Icon(Icons.image_outlined);
                               final index = urls.indexOf(p.url!);
                               return GestureDetector(
                                 onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
                                 child: Hero(
                                   tag: p.url!,
-                                  child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
+                                  child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
                                 ),
                               );
                             },
@@ -527,7 +532,7 @@ class _DesktopDetail extends StatelessWidget {
                     onTap: () => _openImagePreview(context, [detail.subject.pic!], 0),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(detail.subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                      child: Image.network(subjectImageUrl(detail.subject, SettingsStore.instance.imageQuality) ?? detail.subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -585,11 +590,12 @@ class _DesktopDetail extends StatelessWidget {
                         itemCount: detail.photos.length,
                         itemBuilder: (_, i) {
                           final p = detail.photos[i];
-                          if (p.url == null) return const Icon(Icons.image_outlined);
+                          final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
+                          if (displayUrl == null) return const Icon(Icons.image_outlined);
                           final index = urls.indexOf(p.url!);
                           return GestureDetector(
                             onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
-                            child: Image.network(p.url!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
+                            child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
                           );
                         },
                       );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/settings.dart';
 import '../models/models.dart';
 
 /// Poster card for grids. [isDoulist] subjects render a list badge
@@ -12,6 +13,7 @@ class SubjectPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pic = subjectImageUrl(subject, SettingsStore.instance.imageQuality);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -24,12 +26,12 @@ class SubjectPosterCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: subject.pic == null
+              child: pic == null
                   ? Center(child: Text(subject.title.isEmpty ? '?' : subject.title[0]))
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        subject.pic!,
+                        pic,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         errorBuilder: (context, error, stackTrace) => Center(
@@ -64,6 +66,7 @@ class SubjectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pic = subjectImageUrl(subject, SettingsStore.instance.imageQuality);
     return ListTile(
       leading: Container(
         width: 56,
@@ -72,11 +75,11 @@ class SubjectRow extends StatelessWidget {
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(6),
         ),
-        child: subject.pic == null
+        child: pic == null
             ? const Icon(Icons.book_outlined)
             : ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: Image.network(subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                child: Image.network(pic, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
               ),
       ),
       title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),

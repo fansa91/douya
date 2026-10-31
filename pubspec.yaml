@@ -15,6 +15,9 @@ dependencies:
   # Image preview (c001apk's pair): photo_view gallery + cached_network_image.
   photo_view: ^0.15.0
   cached_network_image: ^3.4.0
+  flutter_cache_manager: ^3.4.0
+  # Dynamic color (c001apk's 动态取色): system seed on Android 12+.
+  dynamic_color: ^1.7.0
   # Video preview for Frodo trailers (mp4).
   video_player: ^2.9.0
   # Image preview save/share/open-in-browser (c001apk's set, same versions).

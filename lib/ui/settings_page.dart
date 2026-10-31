@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../data/image_cache.dart';
 import '../data/settings.dart';
+import '../models/models.dart';
 
 /// Settings page, modeled on c001apk's categorized settings:
 /// mobile pushes a detail page per category; desktop (wide) shows
@@ -8,8 +10,9 @@ import '../data/settings.dart';
 /// Only settings douya actually implements are listed here — no
 /// placeholder switches for features that do not exist yet.
 enum SettingsSection {
-  appearance('外观', '主题模式、M3 主题色', Icons.palette_outlined),
+  appearance('外观', '主题模式、M3 主题色、动态取色、字号、图片质量', Icons.palette_outlined),
   search('搜索', '搜索历史', Icons.search_outlined),
+  storage('存储', '图片缓存与清理', Icons.storage_outlined),
   about('关于', '版本与访客模式说明', Icons.info_outlined);
 
   const SettingsSection(this.title, this.description, this.icon);
@@ -146,8 +149,61 @@ class _SettingsDetail extends StatelessWidget {
                     ),
                 ],
               ),
+              if (settings.dynamicColor)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('动态取色已开启，上面这些种子色暂不生效。'),
+                ),
               const SizedBox(height: 8),
               const Text('纸张底色仍固定为 #F7F5F0，评分仍为琥珀色，见 README 的 M3 说明。'),
+              const SizedBox(height: 24),
+              const Text('动态取色', style: TextStyle(fontWeight: FontWeight.bold)),
+              SwitchListTile(
+                title: const Text('跟随系统配色'),
+                subtitle: const Text('开启后按系统配色换主题（仅 Android 12+ 有效，其他平台自动回落到种子色）；关闭后用上面的种子色'),
+                value: settings.dynamicColor,
+                onChanged: settings.setDynamicColor,
+              ),
+              const SizedBox(height: 16),
+              const Text('字号', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Text('小'),
+                  Expanded(
+                    child: Slider(
+                      value: settings.fontScale,
+                      min: SettingsStore.minFontScale,
+                      max: SettingsStore.maxFontScale,
+                      divisions: 10,
+                      label: '${(settings.fontScale * 100).round()}%',
+                      onChanged: settings.setFontScale,
+                    ),
+                  ),
+                  const Text('大'),
+                ],
+              ),
+              Text('当前 ${(settings.fontScale * 100).round()}%，改动立即对全应用文字生效。'),
+              const SizedBox(height: 24),
+              const Text('图片质量', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('控制海报、剧照网格用大图还是小图。自动是大图优先（和以前一样）；预览页点开后始终显示大图，不受这项影响。'),
+              const SizedBox(height: 8),
+              RadioGroup<ImageQuality>(
+                groupValue: settings.imageQuality,
+                onChanged: (quality) {
+                  if (quality != null) settings.setImageQuality(quality);
+                },
+                child: Column(
+                  children: [
+                    for (final quality in ImageQuality.values)
+                      RadioListTile<ImageQuality>(
+                        title: Text(quality.label),
+                        value: quality,
+                      ),
+                  ],
+                ),
+              ),
             ],
             SettingsSection.search => [
               SwitchListTile(
@@ -186,6 +242,13 @@ class _SettingsDetail extends StatelessWidget {
                       },
               ),
             ],
+            SettingsSection.storage => [
+              const Text('图片缓存', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('这里是预览画廊下载过的图片（海报、剧照的磁盘缓存）。清理后再次打开会重新下载，不影响搜索历史和设置。'),
+              const SizedBox(height: 8),
+              const _CacheSection(),
+            ],
             SettingsSection.about => [
               ListTile(
                 leading: Image.asset('assets/logo.png', width: 48, height: 48),
@@ -198,7 +261,7 @@ class _SettingsDetail extends StatelessWidget {
               ),
               const ListTile(
                 title: Text('图片预览'),
-                subtitle: Text('剧照点开是全屏画廊，可缩放、滑动、桌面左右键切换，长按复制链接。保存/分享尚未接入。'),
+                subtitle: Text('剧照点开是全屏画廊，可缩放、滑动、桌面左右键切换，长按菜单可保存 / 分享 / 复制链接 / 在浏览器中打开（桌面端保存走浏览器打开）。'),
               ),
               const ListTile(
                 title: Text('视频预览'),
@@ -210,6 +273,67 @@ class _SettingsDetail extends StatelessWidget {
               ),
             ],
           },
+        );
+      },
+    );
+  }
+}
+
+/// Cache size display + clear action for the storage section.
+/// Size is re-measured on open and after every clear.
+class _CacheSection extends StatefulWidget {
+  const _CacheSection();
+
+  @override
+  State<_CacheSection> createState() => _CacheSectionState();
+}
+
+class _CacheSectionState extends State<_CacheSection> {
+  Future<int>? _sizeFuture;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sizeFuture = ImageCacheService.sizeBytes();
+  }
+
+  Future<void> _clear() async {
+    setState(() => _clearing = true);
+    final freed = await ImageCacheService.clear();
+    if (!mounted) return;
+    setState(() {
+      _clearing = false;
+      _sizeFuture = ImageCacheService.sizeBytes();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已清理图片缓存 ${ImageCacheService.formatBytes(freed)}')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<int>(
+      future: _sizeFuture,
+      builder: (context, snapshot) {
+        final size = snapshot.data ?? 0;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              title: const Text('图片磁盘缓存'),
+              subtitle: Text(
+                snapshot.connectionState == ConnectionState.waiting
+                    ? '正在统计…'
+                    : ImageCacheService.formatBytes(size),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: _clearing ? null : _clear,
+              child: Text(_clearing ? '清理中…' : '清理缓存'),
+            ),
+          ],
         );
       },
     );

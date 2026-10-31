@@ -26,6 +26,40 @@ class Rating {
   }
 }
 
+/// Image quality (c001apk's 自动 / 原图 / 缩略图). Applied to
+/// posters and photo grids; the image preview page always shows the
+/// large URL it was opened with, regardless of this setting.
+enum ImageQuality {
+  auto('自动'),
+  origin('原图'),
+  thumbnail('缩略图');
+
+  const ImageQuality(this.label);
+
+  final String label;
+}
+
+/// Resolve which URL a subject poster uses under [quality]:
+/// auto = the parsed best URL (large first, as before),
+/// origin = the large URL, thumbnail = the normal URL, each
+/// falling back to the parsed URL when that size is absent.
+String? subjectImageUrl(Subject subject, ImageQuality quality) {
+  return switch (quality) {
+    ImageQuality.origin => subject.picLarge ?? subject.pic,
+    ImageQuality.thumbnail => subject.picSmall ?? subject.pic,
+    ImageQuality.auto => subject.pic,
+  };
+}
+
+/// Same resolution for a photo grid item.
+String? photoImageUrl(Photo photo, ImageQuality quality) {
+  return switch (quality) {
+    ImageQuality.origin => photo.urlLarge ?? photo.url,
+    ImageQuality.thumbnail => photo.urlSmall ?? photo.url,
+    ImageQuality.auto => photo.url,
+  };
+}
+
 class Subject {
   const Subject({
     required this.id,
@@ -33,6 +67,8 @@ class Subject {
     required this.title,
     this.originalTitle,
     this.pic,
+    this.picLarge,
+    this.picSmall,
     this.rating,
     this.year,
     this.cardSubtitle,
@@ -46,6 +82,8 @@ class Subject {
   final String title;
   final String? originalTitle;
   final String? pic;
+  final String? picLarge;
+  final String? picSmall;
   final Rating? rating;
   final String? year;
   final String? cardSubtitle;
@@ -73,6 +111,20 @@ class Subject {
     if (pic == null && images is Map) {
       pic = images['large'] as String?;
     }
+    String? picLarge;
+    String? picSmall;
+    if (rawPic is Map) {
+      picLarge = rawPic['large'] as String?;
+      picSmall = rawPic['normal'] as String?;
+    }
+    if (rawCover is Map) {
+      picLarge ??= rawCover['large'] as String?;
+      picSmall ??= rawCover['normal'] as String?;
+    }
+    if (images is Map) {
+      picLarge ??= images['large'] as String?;
+    }
+    picLarge ??= json['cover_url'] as String? ?? (rawCover is String ? rawCover : null);
     final itemType = json['item_type'] as String? ?? json['type'] as String?;
     return Subject(
       id: '${json['id'] ?? ''}',
@@ -80,6 +132,8 @@ class Subject {
       title: (json['title'] as String?) ?? '',
       originalTitle: json['original_title'] as String?,
       pic: pic,
+      picLarge: picLarge,
+      picSmall: picSmall,
       rating: Rating.tryParse(json['rating']),
       year: json['year'] as String?,
       cardSubtitle: json['card_subtitle'] as String?,
@@ -438,17 +492,23 @@ class Review {
 }
 
 class Photo {
-  const Photo({required this.id, this.url, this.description = ''});
+  const Photo({required this.id, this.url, this.urlLarge, this.urlSmall, this.description = ''});
 
   final String id;
   final String? url;
+  final String? urlLarge;
+  final String? urlSmall;
   final String description;
 
   factory Photo.fromJson(Map<String, dynamic> json) {
     final image = json['image'];
     String? url;
+    String? urlLarge;
+    String? urlSmall;
     if (image is Map) {
-      url = image['large'] as String? ?? image['normal'] as String?;
+      urlLarge = image['large'] as String?;
+      urlSmall = image['normal'] as String?;
+      url = urlLarge ?? urlSmall;
     } else if (image is String) {
       url = image;
     }
@@ -456,6 +516,8 @@ class Photo {
     return Photo(
       id: '${json['id'] ?? ''}',
       url: url,
+      urlLarge: urlLarge,
+      urlSmall: urlSmall,
       description: (json['description'] as String?) ?? '',
     );
   }

@@ -1,3 +1,4 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
 import 'api/douban_client.dart';
@@ -30,26 +31,49 @@ class DouyaApp extends StatelessWidget {
     final DoubanRepository repository = hasKeys ? RealDoubanRepository(DoubanClient()) : const FakeDoubanRepository();
     return AnimatedBuilder(
       animation: SettingsStore.instance,
-      builder: (context, _) => MaterialApp(
-        title: 'douya',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: SettingsStore.instance.seedColor,
-            brightness: Brightness.light,
-          ),
-          scaffoldBackgroundColor: const Color(0xFFF7F5F0),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: SettingsStore.instance.seedColor,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
-        themeMode: SettingsStore.instance.themeMode,
-        home: AdaptiveScaffold(repository: repository),
+      builder: (context, _) => DynamicColorBuilder(
+        builder: (lightDynamic, darkDynamic) {
+          final settings = SettingsStore.instance;
+          // Dynamic color only exists where the OS provides it
+          // (Android 12+); elsewhere the schemes are null and the
+          // seed color is used, dynamic setting or not.
+          final lightScheme = settings.dynamicColor && lightDynamic != null
+              ? lightDynamic
+              : ColorScheme.fromSeed(
+                  seedColor: settings.seedColor,
+                  brightness: Brightness.light,
+                );
+          final darkScheme = settings.dynamicColor && darkDynamic != null
+              ? darkDynamic
+              : ColorScheme.fromSeed(
+                  seedColor: settings.seedColor,
+                  brightness: Brightness.dark,
+                );
+          final useDynamic = settings.dynamicColor && lightDynamic != null;
+          return MaterialApp(
+            title: 'douya',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              colorScheme: lightScheme,
+              // The paper background is douya's own look; it only
+              // applies to the seed-color theme, not the dynamic one.
+              scaffoldBackgroundColor: useDynamic ? null : const Color(0xFFF7F5F0),
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              colorScheme: darkScheme,
+              useMaterial3: true,
+            ),
+            themeMode: settings.themeMode,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(settings.fontScale),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            ),
+            home: AdaptiveScaffold(repository: repository),
+          );
+        },
       ),
     );
   }
