@@ -642,6 +642,7 @@ const browseCategoryLabels = <String, String>{
   'tv': '剧集',
   'book': '图书',
   'music': '音乐',
+  'show': '综艺',
 };
 
 const browseFilters = <String, List<BrowseFilter>>{
@@ -651,11 +652,14 @@ const browseFilters = <String, List<BrowseFilter>>{
     BrowseFilter('recent', '近期热门'),
     BrowseFilter('top250', 'Top250'),
     BrowseFilter('recommend', '推荐'),
+    BrowseFilter('hot_gaia', '豆瓣热门'),
+    BrowseFilter('filter', '多维筛选'),
   ],
   'tv': [
     BrowseFilter('recent', '近期热门'),
     BrowseFilter('hot', '热门剧集'),
     BrowseFilter('recommend', '推荐'),
+    BrowseFilter('filter', '多维筛选'),
   ],
   'book': [
     BrowseFilter('hot', '热门图书'),
@@ -665,6 +669,11 @@ const browseFilters = <String, List<BrowseFilter>>{
   'music': [
     BrowseFilter('hot', '热门音乐'),
   ],
+  'show': [
+    BrowseFilter('hot', '热门综艺'),
+    BrowseFilter('domestic', '国内综艺'),
+    BrowseFilter('foreign', '国外综艺'),
+  ],
 };
 
 class BrowseResult {
@@ -672,6 +681,60 @@ class BrowseResult {
 
   final List<Subject> items;
   final int total;
+}
+
+/// One filter dimension from a tag-search response: `type` is the
+/// group name (形式 / 地区 / 类型 / 年代 / 特色) and `values` are its
+/// selectable values, the first usually being 全部… (meaning "no
+/// selection", not a value to send). Only 地区 / 类型 / 年代 / 特色
+/// values are tags that may go into q; 形式 values are NOT tags
+/// (sending one, e.g. 电视剧, returns 0 items) and are never offered
+/// as choices in the faceted UI.
+class TagGroup {
+  const TagGroup({required this.type, required this.values});
+
+  final String type;
+  final List<String> values;
+
+  factory TagGroup.fromJson(Map<String, dynamic> json) {
+    final raw = json['data'];
+    return TagGroup(
+      type: (json['type'] as String?) ?? '',
+      values: raw is List ? raw.whereType<String>().toList() : const [],
+    );
+  }
+}
+
+class TagSort {
+  const TagSort({required this.name, required this.text});
+
+  /// U = 默认, T = 热度, S = 评分, R = 时间 (verified 2026-10-31:
+  /// sort changes the first items and, for R, the total).
+  final String name;
+  final String text;
+
+  factory TagSort.fromJson(Map<String, dynamic> json) {
+    return TagSort(
+      name: (json['name'] as String?) ?? 'U',
+      text: (json['text'] as String?) ?? '',
+    );
+  }
+}
+
+/// Result of a faceted tag search: paged subjects plus the filter
+/// dimensions and sort options that came with the response.
+class TagSearchResult {
+  const TagSearchResult({
+    this.items = const [],
+    this.total = 0,
+    this.groups = const [],
+    this.sorts = const [],
+  });
+
+  final List<Subject> items;
+  final int total;
+  final List<TagGroup> groups;
+  final List<TagSort> sorts;
 }
 
 /// One home (发现) recommendation section. `category` + `filter` are the

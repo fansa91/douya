@@ -57,6 +57,24 @@ abstract class DoubanRepository {
   /// rank/rank_value). `total` is the API's total.
   Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count = 20});
 
+  /// Faceted tag search: Rexxar /{endpoint}/tag (endpoint is
+  /// 'movie' or 'tv'; both hit the same backend, verified
+  /// 2026-10-31), unsigned, guest-usable. `q` is the comma-joined
+  /// selected dimension values (地区 / 类型 / 年代 / 特色); an empty
+  /// q returns everything (total 786,514 at probe time). `sort` is
+  /// U (默认) / T (热度) / S (评分) / R (时间); `playable` must be
+  /// sent as the string 'true' (playable=1 is ignored, verified).
+  /// The response also carries the dimension groups and sorts, so
+  /// the first call supplies the filter UI itself.
+  Future<TagSearchResult> fetchTagSearch(
+    String endpoint, {
+    String q = '',
+    String sort = 'U',
+    bool playable = false,
+    int start = 0,
+    int count = 20,
+  });
+
   Future<List<GroupTopic>> fetchGroupTopics(String groupId);
 
   /// Paged group topics with a verified sort (new = 最新, hot = 热门).

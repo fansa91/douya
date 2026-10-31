@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
+import 'faceted_view.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
@@ -20,7 +21,7 @@ class BrowsePage extends StatefulWidget {
 }
 
 class _BrowsePageState extends State<BrowsePage> {
-  static const _categories = ['movie', 'tv', 'book', 'music'];
+  static const _categories = ['movie', 'tv', 'book', 'music', 'show'];
 
   late String _category;
   late String _filter;
@@ -40,6 +41,17 @@ class _BrowsePageState extends State<BrowsePage> {
   }
 
   Future<void> _load() async {
+    // The 多维筛选 filter does not use fetchBrowse at all; it renders
+    // FacetedView, which drives its own searches.
+    if (_filter == 'filter') {
+      setState(() {
+        _loading = false;
+        _error = null;
+        _items = [];
+        _total = 0;
+      });
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -140,13 +152,19 @@ class _BrowsePageState extends State<BrowsePage> {
           ),
         ),
         Expanded(
-          child: _loading
-              ? const LoadingList()
-              : _error != null
-                  ? EmptyState(message: '加载失败：$_error')
-                  : _items.isEmpty
-                      ? const EmptyState(message: '该分类暂无内容')
-                      : LayoutBuilder(
+          child: _filter == 'filter'
+              ? FacetedView(
+                  key: ValueKey(_category),
+                  repository: widget.repository,
+                  endpoint: _category,
+                )
+              : _loading
+                  ? const LoadingList()
+                  : _error != null
+                      ? EmptyState(message: '加载失败：$_error')
+                      : _items.isEmpty
+                          ? const EmptyState(message: '该分类暂无内容')
+                          : LayoutBuilder(
                           builder: (context, constraints) {
                             final isGrid = constraints.maxWidth >= 600;
                             final columns = constraints.maxWidth >= 1440 ? 5 : 4;

@@ -186,6 +186,20 @@ class RealDoubanRepository implements DoubanRepository {
     return BrowseResult(items: items, total: (data['total'] as num?)?.toInt() ?? items.length);
   }
 
+  /// Rexxar /movie/{name} (flat items + total, not
+  /// subject_collection_items): used for 豆瓣热门 (hot_gaia, 309).
+  /// The H5 movie_collections page whitelists only hot_gaia and
+  /// movie_showing here; movie_showing additionally requires loc_id
+  /// and is left on the Frodo route in fetchBrowse.
+  Future<BrowseResult> _rexxarMovie(String name, int start, int count) async {
+    final data = await _rexxar('movie/$name', {'start': start, 'count': count});
+    if (data == null) return const BrowseResult();
+    return BrowseResult(
+      items: _parseList(data['items'], (j) => Subject.fromJson(j)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   @override
   Future<BrowseResult> fetchBrowse(String category, String filter, {int start = 0, int count = 20}) async {
     switch ('$category/$filter') {
@@ -193,6 +207,14 @@ class RealDoubanRepository implements DoubanRepository {
         return _frodoCollection('movie_showing', start, count);
       case 'movie/soon':
         return _frodoCollection('movie_soon', start, count);
+      case 'movie/hot_gaia':
+        return _rexxarMovie('hot_gaia', start, count);
+      case 'show/hot':
+        return _rexxarCollection('show_hot', start, count);
+      case 'show/domestic':
+        return _rexxarCollection('show_domestic', start, count);
+      case 'show/foreign':
+        return _rexxarCollection('show_foreign', start, count);
       case 'movie/recent':
         return _rexxarRecent('movie', start, count);
       case 'movie/top250':
@@ -613,6 +635,40 @@ class RealDoubanRepository implements DoubanRepository {
     return BrowseResult(
       items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
       total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<TagSearchResult> fetchTagSearch(
+    String endpoint, {
+    String q = '',
+    String sort = 'U',
+    bool playable = false,
+    int start = 0,
+    int count = 20,
+  }) async {
+    // Rexxar /{movie|tv}/tag (unsigned, guest 200, 2026-10-31).
+    // Referer matches the probe (m.douban.com). playable is only
+    // honoured as the string 'true'; playable=1 leaves the total
+    // unchanged, so it is omitted entirely when off.
+    final params = <String, dynamic>{'q': q, 'sort': sort, 'start': start, 'count': count};
+    if (playable) params['playable'] = 'true';
+    final dio = Dio();
+    final response = await dio.get(
+      'https://m.douban.com/rexxar/api/v2/$endpoint/tag',
+      queryParameters: params,
+      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+    );
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return const TagSearchResult();
+    return TagSearchResult(
+      items: _parseList(
+        data['data'],
+        (j) => Subject.fromJson(j, fallbackType: endpoint == 'tv' ? 'tv' : 'movie'),
+      ),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+      groups: _parseList(data['tags'], TagGroup.fromJson),
+      sorts: _parseList(data['sorts'], TagSort.fromJson),
     );
   }
 

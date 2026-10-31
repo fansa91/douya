@@ -200,6 +200,33 @@ Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count =
 }
 
 @override
+Future<TagSearchResult> fetchTagSearch(
+  String endpoint, {
+  String q = '',
+  String sort = 'U',
+  bool playable = false,
+  int start = 0,
+  int count = 20,
+}) async {
+  return const TagSearchResult(
+    items: [_shawshank],
+    total: 1,
+    groups: [
+      TagGroup(type: '地区', values: ['全部地区', '中国大陆', '美国', '日本']),
+      TagGroup(type: '类型', values: ['全部类型', '剧情', '喜剧']),
+      TagGroup(type: '年代', values: ['全部年代', '2024', '2010年代']),
+      TagGroup(type: '特色', values: ['全部特色', '经典', '青春']),
+    ],
+    sorts: [
+      TagSort(name: 'U', text: '默认'),
+      TagSort(name: 'T', text: '热度'),
+      TagSort(name: 'S', text: '评分'),
+      TagSort(name: 'R', text: '时间'),
+    ],
+  );
+}
+
+@override
 Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
 return const [
 GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 3),
