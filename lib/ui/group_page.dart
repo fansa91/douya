@@ -488,7 +488,15 @@ class TopicDetailView extends StatelessWidget {
           children: [
             Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
+            Row(
+              children: [
+                _authorAvatar(detail.topic.authorAvatar),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
+                ),
+              ],
+            ),
             if (detail.groupName.isNotEmpty) ...[
               const SizedBox(height: 8),
               InkWell(
@@ -517,10 +525,21 @@ class TopicDetailView extends StatelessWidget {
     );
   }
 
+  /// Avatar with the same fallback as the feed cards: a real
+  /// avatar URL when the payload carries one, a person icon when
+  /// it does not (the topic/comment payloads do not always).
+  Widget _authorAvatar(String? url) {
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
+    }
+    return const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16));
+  }
+
   Widget _commentCard(TopicComment c) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
+        leading: _authorAvatar(c.authorAvatar),
         title: Text(c.authorName),
         subtitle: SelectableText(c.text),
         trailing: Row(

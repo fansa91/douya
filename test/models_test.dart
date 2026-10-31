@@ -129,6 +129,42 @@ void main() {
     });
   });
 
+  group('topic avatars', () {
+    test('GroupTopic parses string and map avatars, missing stays null', () {
+      final fromString = GroupTopic.fromJson(<String, dynamic>{
+        'id': '1',
+        'title': 'T',
+        'author': <String, dynamic>{'name': '楼主', 'avatar': 'https://img.example/a.jpg'},
+      });
+      expect(fromString.authorAvatar, 'https://img.example/a.jpg');
+
+      final fromMap = GroupTopic.fromJson(<String, dynamic>{
+        'id': '2',
+        'title': 'T',
+        'author': <String, dynamic>{
+          'name': '楼主',
+          'avatar': <String, dynamic>{'large': 'https://img.example/a-l.jpg', 'normal': 'https://img.example/a-n.jpg'},
+        },
+      });
+      expect(fromMap.authorAvatar, 'https://img.example/a-l.jpg');
+
+      final missing = GroupTopic.fromJson(<String, dynamic>{
+        'id': '3',
+        'title': 'T',
+        'author': <String, dynamic>{'name': '楼主'},
+      });
+      expect(missing.authorAvatar, isNull);
+    });
+
+    test('TopicComment parses the comment author avatar the same way', () {
+      final comment = TopicComment.fromJson(<String, dynamic>{
+        'text': '你好',
+        'author': <String, dynamic>{'name': '路人', 'avatar': 'https://img.example/c.jpg'},
+      });
+      expect(comment.authorAvatar, 'https://img.example/c.jpg');
+    });
+  });
+
   group('other models', () {
     test('RankBoard reads the subject_collection object', () {
       final board = RankBoard.fromJson(<String, dynamic>{

@@ -636,11 +636,24 @@ class Interest {
   }
 }
 
+/// Author avatar from a detail/comment payload's `author` object:
+/// a plain URL string, or a {large, normal} map (the feed uses the
+/// map form). Null when the payload carries none — the UI then
+/// shows the fallback person icon instead of an empty circle.
+String? authorAvatarOf(dynamic author) {
+  if (author is! Map) return null;
+  final avatar = author['avatar'];
+  if (avatar is String) return avatar;
+  if (avatar is Map) return avatar['large'] as String? ?? avatar['normal'] as String?;
+  return null;
+}
+
 class GroupTopic {
   const GroupTopic({
     required this.id,
     required this.title,
     this.authorName = '',
+    this.authorAvatar,
     this.commentsCount = 0,
     this.createTime = '',
     this.coverUrl,
@@ -649,6 +662,7 @@ class GroupTopic {
   final String id;
   final String title;
   final String authorName;
+  final String? authorAvatar;
   final int commentsCount;
   final String createTime;
   final String? coverUrl;
@@ -661,6 +675,7 @@ class GroupTopic {
       id: '${json['id'] ?? ''}',
       title: (json['title'] as String?) ?? '',
       authorName: name,
+      authorAvatar: authorAvatarOf(author),
       commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
       coverUrl: json['cover_url'] as String?,
@@ -674,12 +689,14 @@ class TopicComment {
     required this.text,
     this.voteCount = 0,
     this.createTime = '',
+    this.authorAvatar,
   });
 
   final String authorName;
   final String text;
   final int voteCount;
   final String createTime;
+  final String? authorAvatar;
 
   factory TopicComment.fromJson(Map<String, dynamic> json) {
     final author = json['author'];
@@ -690,6 +707,7 @@ class TopicComment {
       text: (json['text'] as String?) ?? '',
       voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
+      authorAvatar: authorAvatarOf(author),
     );
   }
 }
