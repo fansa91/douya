@@ -5,6 +5,7 @@ import '../data/repository.dart';
 import '../models/models.dart';
 import 'group_page.dart';
 import 'subject_page.dart';
+import 'widgets.dart';
 
 /// Discover page: the real home recommend feed only. The
 /// guest-assembled recommendation sections that used to sit below
@@ -24,13 +25,18 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        _FeedList(repository: repository),
-      ],
+    // Desktop: the feed is text posts, so it gets the reading-pane
+    // treatment (centered 720 column) rather than stretching across
+    // the window; mobile is unaffected (cap wider than viewport).
+    return CenteredWidth(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          _FeedList(repository: repository),
+        ],
+      ),
     );
   }
 }

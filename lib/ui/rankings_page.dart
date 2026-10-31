@@ -93,8 +93,9 @@ class _RankingsPageState extends State<RankingsPage> {
                     )
                   : _boards.isEmpty
                       ? const Center(child: Text('该分类暂无榜单'))
-                      : ListView.builder(
-                          itemCount: _boards.length,
+                      : CenteredWidth(
+                          child: ListView.builder(
+                            itemCount: _boards.length,
                           itemBuilder: (context, i) {
                             final board = _boards[i];
                             return Card(
@@ -128,6 +129,7 @@ class _RankingsPageState extends State<RankingsPage> {
                               ),
                             );
                           },
+                          ),
                         ),
         ),
       ],
@@ -214,8 +216,9 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                 )
               : _items.isEmpty
                   ? const Center(child: Text('该榜单暂无内容'))
-                  : ListView.builder(
-                      itemCount: _items.length + 1,
+                  : CenteredWidth(
+                      child: ListView.builder(
+                        itemCount: _items.length + 1,
                       itemBuilder: (context, i) {
                         if (i == _items.length) {
                           final done = _total > 0 && _items.length >= _total;
@@ -268,6 +271,7 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                           },
                         );
                       },
+                      ),
                     ),
     );
   }

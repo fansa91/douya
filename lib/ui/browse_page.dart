@@ -34,8 +34,10 @@ class _RecommendSections extends StatelessWidget {
         }
         final sections = snapshot.data ?? const [];
         if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
-        return ListView(
-          padding: const EdgeInsets.all(16),
+        return CenteredWidth(
+          maxWidth: 1440,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
           children: [
             for (final section in sections) ...[
               Row(
@@ -71,6 +73,7 @@ class _RecommendSections extends StatelessWidget {
               const SizedBox(height: 24),
             ],
           ],
+        )
         );
       },
     );
@@ -272,8 +275,16 @@ class _BrowsePageState extends State<BrowsePage> {
                           : LayoutBuilder(
                           builder: (context, constraints) {
                             final isGrid = constraints.maxWidth >= 600;
-                            final columns = constraints.maxWidth >= 1440 ? 5 : 4;
-                            return Column(
+                            // Desktop poster grid: cap the row at 1440 and
+                            // derive the column count from a ~240 poster
+                            // width (c001apk's card columns derive from a
+                            // fixed card width the same way), instead of
+                            // stretching 4-5 posters across any window.
+                            final contentWidth = constraints.maxWidth > 1440 ? 1440.0 : constraints.maxWidth;
+                            final columns = ((contentWidth - 48) / 240).floor().clamp(2, 5);
+                            return CenteredWidth(
+                              maxWidth: 1440,
+                              child: Column(
                               children: [
                                 Expanded(
                                   child: isGrid
@@ -316,6 +327,7 @@ class _BrowsePageState extends State<BrowsePage> {
                                   ),
                                 ),
                               ],
+                              ),
                             );
                           },
                         ),

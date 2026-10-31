@@ -150,3 +150,24 @@ class LoadingList extends StatelessWidget {
     return const Center(child: CircularProgressIndicator());
   }
 }
+
+/// Centers a page's content at a readable width on desktop
+/// (c001apk's reading pane centers detail at ~680-760; this uses
+/// 720 for text lists). On narrow screens the cap is wider than
+/// the viewport, so mobile layouts are unaffected.
+class CenteredWidth extends StatelessWidget {
+  const CenteredWidth({super.key, required this.child, this.maxWidth = 720});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
