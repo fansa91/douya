@@ -749,14 +749,38 @@ class RealDoubanRepository implements DoubanRepository {
     final detail = results[0];
     final comments = results[1];
     final group = detail['group'] is Map<String, dynamic> ? detail['group'] as Map<String, dynamic> : null;
+    final rawContent = (detail['content'] as String?) ?? '';
+    // Pictures: the structured photos array first; the <img> URLs
+    // embedded in the HTML content are the same images (verified
+    // 2026-10-31) and serve as fallback when the array is empty.
+    var photos = _parseList(detail['photos'], (j) => Photo.fromJson(j));
+    if (photos.isEmpty) {
+      photos = htmlImageUrls(rawContent).map((src) => Photo(id: '', url: src)).toList();
+    }
+    String? videoUrl;
+    String? videoCoverUrl;
+    String? videoDuration;
+    final videoInfo = detail['video_info'];
+    if (videoInfo is Map<String, dynamic>) {
+      videoUrl = videoInfo['video_url'] as String? ?? videoInfo['play_url'] as String? ?? videoInfo['url'] as String?;
+      videoCoverUrl = videoInfo['cover_url'] as String? ?? videoInfo['cover'] as String?;
+      final duration = videoInfo['video_duration'] ?? videoInfo['duration'];
+      videoDuration = duration == null ? null : '$duration';
+    } else if (videoInfo is String && videoInfo.isNotEmpty) {
+      videoUrl = videoInfo;
+    }
     return TopicDetail(
       topic: GroupTopic.fromJson(detail),
       // Topic content arrives as HTML; shown raw it leaks literal
       // tags into the detail page (reported 2026-10-31).
-      content: htmlToPlainText((detail['content'] as String?) ?? ''),
+      content: htmlToPlainText(rawContent),
       comments: _parseList(comments['comments'], TopicComment.fromJson),
       groupId: '${group?['id'] ?? ''}',
       groupName: (group?['name'] as String?) ?? '',
+      photos: photos,
+      videoUrl: videoUrl,
+      videoCoverUrl: videoCoverUrl,
+      videoDuration: videoDuration,
     );
   }
 

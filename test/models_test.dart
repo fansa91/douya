@@ -331,6 +331,17 @@ void main() {
       expect(c.userAvatar, 'https://img.example/u.jpg');
     });
 
+    test('htmlImageUrls extracts embedded topic images', () {
+      expect(
+        htmlImageUrls("<div id='content'><div class=\"image-wrapper\"><img src=\"https://img3.doubanio.com/view/group_topic/l/public/p750504148.webp\"></div><p>文字</p><img src='https://img3.doubanio.com/view/group_topic/l/public/p750504269.webp'></div>"),
+        [
+          'https://img3.doubanio.com/view/group_topic/l/public/p750504148.webp',
+          'https://img3.doubanio.com/view/group_topic/l/public/p750504269.webp',
+        ],
+      );
+      expect(htmlImageUrls('<p>纯文字，无图</p>'), isEmpty);
+    });
+
     test('ReviewDetail strips HTML to plain text', () {
       final review = ReviewDetail.fromJson(<String, dynamic>{
         'id': 1000369,

@@ -21,6 +21,16 @@ String? imageUrlOf(dynamic value) {
 /// as HTML (`<div id='content'><p ...>...</p></div>`, sometimes with
 /// image wrappers); shown raw it leaks literal tags into the page
 /// (reported 2026-10-31). Long-review content uses the same shape.
+/// Image URLs embedded in an HTML body (`<img src="...">`). Topic
+/// detail content carries its pictures this way as well as in the
+/// structured `photos` array (verified live 2026-10-31: the two
+/// carry the same images, so the page prefers `photos` and only
+/// falls back to these when the array is empty).
+List<String> htmlImageUrls(String raw) {
+  final matches = RegExp(r'''<img[^>]+src=["']([^"']+)["']''', caseSensitive: false).allMatches(raw);
+  return matches.map((m) => m.group(1)!).where((url) => url.isNotEmpty).toList();
+}
+
 String htmlToPlainText(String raw) {
   return raw
       .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
@@ -994,11 +1004,29 @@ class TopicDetail {
     this.comments = const [],
     this.groupId = '',
     this.groupName = '',
+    this.photos = const [],
+    this.videoUrl,
+    this.videoCoverUrl,
+    this.videoDuration,
   });
 
   final GroupTopic topic;
   final String content;
   final List<TopicComment> comments;
+
+  /// Attached pictures, from the detail response's `photos` array
+  /// (Photo-shaped, image.large/normal as size objects). When the
+  /// array is empty, fetchTopic falls back to the `<img>` URLs
+  /// embedded in the HTML content.
+  final List<Photo> photos;
+
+  /// Video attached to the topic, from `video_info` (key names
+  /// video_url / video_duration follow the app's own video widget).
+  /// Null in every topic probed 2026-10-31, so the video entry only
+  /// appears when a topic actually carries one.
+  final String? videoUrl;
+  final String? videoCoverUrl;
+  final String? videoDuration;
 
   /// The group this topic belongs to, from the detail response's
   /// `group` object (every topic payload carries one: verified in

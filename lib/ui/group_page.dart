@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
+import 'image_preview_page.dart';
+import 'video_preview_page.dart';
 import 'widgets.dart';
 
 /// Group browsing, modeled on c001apk's topic page patterns: a sort
@@ -423,6 +425,7 @@ class TopicDetailView extends StatelessWidget {
                   _headerCard(context, detail),
                   const SizedBox(height: 16),
                   SelectableText(detail.content),
+                  _topicMedia(context, detail),
                   const Divider(height: 32),
                   Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -444,6 +447,7 @@ class TopicDetailView extends StatelessWidget {
                         _headerCard(context, detail),
                         const SizedBox(height: 16),
                         SelectableText(detail.content),
+                        _topicMedia(context, detail),
                       ],
                     ),
                   ),
@@ -511,6 +515,81 @@ class TopicDetailView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Attached pictures and video, shown below the body text. The
+  /// photos array and the content's <img> URLs are the same images
+  /// (verified 2026-10-31); fetchTopic already prefers the array.
+  /// The video entry only appears when the topic carries a video
+  /// (video_info was null in every topic probed 2026-10-31).
+  Widget _topicMedia(BuildContext context, TopicDetail detail) {
+    final photoUrls = detail.photos.map((p) => p.url).whereType<String>().toList();
+    final hasVideo = detail.videoUrl != null && detail.videoUrl!.isNotEmpty;
+    if (!hasVideo && photoUrls.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasVideo)
+          ListTile(
+            leading: detail.videoCoverUrl == null
+                ? const Icon(Icons.play_circle_outlined)
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: CachedNetworkImage(
+                      imageUrl: detail.videoCoverUrl!,
+                      httpHeaders: doubanImageHeaders,
+                      width: 72,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorWidget: (context, url, error) => const Icon(Icons.play_circle_outlined),
+                    ),
+                  ),
+            title: const Text('视频'),
+            subtitle: detail.videoDuration != null && detail.videoDuration!.isNotEmpty ? Text(detail.videoDuration!) : null,
+            trailing: const Icon(Icons.play_arrow),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => VideoPreviewPage(
+                    trailers: [
+                      Trailer(
+                        id: '',
+                        title: detail.topic.title,
+                        videoUrl: detail.videoUrl,
+                        coverUrl: detail.videoCoverUrl,
+                        runtime: detail.videoDuration ?? '',
+                      ),
+                    ],
+                    initialIndex: 0,
+                  ),
+                ),
+              );
+            },
+          ),
+        if (photoUrls.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
+            itemCount: photoUrls.length,
+            itemBuilder: (_, i) => GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => ImagePreviewPage(urls: photoUrls, initialIndex: i)),
+                );
+              },
+              child: CachedNetworkImage(
+                imageUrl: photoUrls[i],
+                httpHeaders: doubanImageHeaders,
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
