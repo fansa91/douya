@@ -143,16 +143,23 @@ class _UserPageState extends State<UserPage> {
                             },
                           );
                         }
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(24),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                            childAspectRatio: 0.68,
+                        // Same poster-grid rule as Browse: row capped
+                        // at 1440, columns from a ~240 poster width.
+                        final contentWidth = constraints.maxWidth > 1440 ? 1440.0 : constraints.maxWidth;
+                        final columns = ((contentWidth - 48) / 240).floor().clamp(2, 5);
+                        return CenteredWidth(
+                          maxWidth: 1440,
+                          child: GridView.builder(
+                            padding: const EdgeInsets.all(24),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: columns,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                              childAspectRatio: 0.68,
+                            ),
+                            itemCount: _interests.length,
+                            itemBuilder: (_, i) => SubjectPosterCard(subject: _interests[i].subject),
                           ),
-                          itemCount: _interests.length,
-                          itemBuilder: (_, i) => SubjectPosterCard(subject: _interests[i].subject),
                         );
                       },
                     ),

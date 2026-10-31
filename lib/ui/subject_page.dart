@@ -508,10 +508,11 @@ class ReviewDetailPage extends StatelessWidget {
           if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
           final detail = snapshot.data;
           if (detail == null) return const EmptyState(message: '暂无长评');
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(detail.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          return CenteredWidth(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(detail.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(
                 [
@@ -523,7 +524,8 @@ class ReviewDetailPage extends StatelessWidget {
               ),
               const Divider(height: 32),
               SelectableText(detail.content),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -644,10 +646,14 @@ class _DesktopDetail extends StatelessWidget {
           ),
           const SizedBox(width: 24),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(detail.summary),
+            // Reading column capped at 720 (same CenteredWidth used
+            // elsewhere); the left info column and the right
+            // recommendations column keep their fixed widths.
+            child: CenteredWidth(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(detail.summary),
                 _trailerSection(context, detail.trailers),
                 const SizedBox(height: 24),
                 const Text('短评', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -668,7 +674,8 @@ class _DesktopDetail extends StatelessWidget {
                     fillViewport: false,
                   ),
                 ],
-              ],
+                ],
+              ),
             ),
           ),
           if (wide) ...[

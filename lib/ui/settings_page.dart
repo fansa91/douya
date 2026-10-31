@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/image_cache.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
+import 'widgets.dart';
 
 /// Settings page, modeled on c001apk's categorized settings:
 /// mobile pushes a detail page per category; desktop (wide) shows
@@ -74,7 +75,9 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(width: 280, child: _categories(true)),
               const VerticalDivider(width: 1),
               Expanded(
-                child: _SettingsDetail(key: ValueKey(_section), section: _section),
+                child: CenteredWidth(
+                  child: _SettingsDetail(key: ValueKey(_section), section: _section),
+                ),
               ),
             ],
           );

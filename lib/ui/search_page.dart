@@ -246,9 +246,10 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       animation: settings,
       builder: (context, _) {
         final currentHistory = settings.searchHistoryEnabled ? settings.searchHistory : const <String>[];
-        return ListView(
-          children: [
-            if (_hots.isNotEmpty)
+        return CenteredWidth(
+          child: ListView(
+            children: [
+              if (_hots.isNotEmpty)
               _chipSection('热搜', _hots.map((s) => s.title).where((t) => t.isNotEmpty).toList(), (title) {
                 _controller.text = title;
                 _submit(title);
@@ -287,15 +288,17 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
             ),
             if (currentHistory.isEmpty && _hots.isEmpty)
               const EmptyState(message: '输入关键词，先看联想结果；回车进入完整搜索。'),
-          ],
+            ],
+          ),
         );
       },
     );
   }
 
   Widget _suggestState() {
-    return ListView(
-      children: [
+    return CenteredWidth(
+      child: ListView(
+        children: [
         if (_suggestWords.isNotEmpty)
           Padding(
             padding: const EdgeInsets.all(16),
@@ -318,7 +321,8 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
           SubjectRow(subject: subject, onTap: () => _openSubject(subject)),
         if (_suggestWords.isEmpty && _suggestSubjects.isEmpty)
           const EmptyState(message: '没有联想结果，回车进入完整搜索。'),
-      ],
+        ],
+      ),
     );
   }
 
@@ -390,7 +394,8 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         if (_error != null)
           Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
         Expanded(
-          child: switch (_tab) {
+          child: CenteredWidth(
+            child: switch (_tab) {
             0 => _subjectsTab(),
             1 => _contents.isEmpty
                 ? const EmptyState(message: '没有找到帖子内容')
@@ -465,6 +470,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                     ),
                   ),
           },
+          ),
         ),
       ],
     );

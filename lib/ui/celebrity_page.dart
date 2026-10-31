@@ -25,8 +25,9 @@ class CelebrityPage extends StatelessWidget {
           if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
           final detail = snapshot.data;
           if (detail == null) return const EmptyState(message: '暂无影人信息');
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          return CenteredWidth(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
             children: [
               ListTile(
                 leading: CircleAvatar(child: Text(detail.celebrity.name.isEmpty ? '?' : detail.celebrity.name[0])),
@@ -47,7 +48,8 @@ class CelebrityPage extends StatelessWidget {
                     );
                   },
                 ),
-            ],
+              ],
+            ),
           );
         },
       ),

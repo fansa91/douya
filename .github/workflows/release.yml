@@ -46,8 +46,32 @@ permissions:
   contents: write
 
 jobs:
+  # Test gate: pure unit tests under test/ (model parsing, image
+  # quality resolution, cache formatting — no network, no device).
+  # Runs first; all four platform builds need it, so a failing test
+  # stops the release before any platform build starts. No secrets
+  # needed here (tests never touch the real API client).
+  test:
+    name: Flutter test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Analyze and test
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
   android:
     name: Android APK (multi-arch, signed)
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,6 +156,7 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned, no codesign)
+    needs: test
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -196,6 +221,7 @@ jobs:
 
   macos:
     name: macOS DMG (unsigned)
+    needs: test
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -259,6 +285,7 @@ jobs:
 
   windows:
     name: Windows ZIP (unsigned)
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

@@ -224,8 +224,9 @@ class _FacetedViewState extends State<FacetedView> {
                     )
                   : _items.isEmpty
                       ? const Center(child: Text('没有符合条件的条目'))
-                      : ListView.builder(
-                          itemCount: _items.length + 1,
+                      : CenteredWidth(
+                          child: ListView.builder(
+                            itemCount: _items.length + 1,
                           itemBuilder: (context, i) {
                             if (i == _items.length) {
                               final done = _total > 0 && _items.length >= _total;
@@ -259,6 +260,7 @@ class _FacetedViewState extends State<FacetedView> {
                               },
                             );
                           },
+                          ),
                         ),
         ),
       ],

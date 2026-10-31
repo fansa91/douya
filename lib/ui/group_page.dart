@@ -293,9 +293,11 @@ class _GroupPageState extends State<GroupPage> {
                     )
                   : _hotGroups.isEmpty
                       ? const EmptyState(message: '暂无热门小组')
-                      : ListView.builder(
-                          itemCount: _hotGroups.length,
-                          itemBuilder: (_, i) => _hotGroupCard(_hotGroups[i]),
+                      : CenteredWidth(
+                          child: ListView.builder(
+                            itemCount: _hotGroups.length,
+                            itemBuilder: (_, i) => _hotGroupCard(_hotGroups[i]),
+                          ),
                         ),
         ),
       ],
@@ -440,31 +442,36 @@ class TopicDetailView extends StatelessWidget {
                 ],
               );
             }
-            return Row(
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _headerCard(context, detail),
-                      const SizedBox(height: 16),
-                      SelectableText(detail.content),
-                    ],
+            // The split itself is capped at 1440 so neither column
+            // stretches across an ultrawide window.
+            return CenteredWidth(
+              maxWidth: 1440,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        _headerCard(context, detail),
+                        const SizedBox(height: 16),
+                        SelectableText(detail.content),
+                      ],
+                    ),
                   ),
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-                      for (final c in detail.comments) _commentCard(c),
-                    ],
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
+                        for (final c in detail.comments) _commentCard(c),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         );
