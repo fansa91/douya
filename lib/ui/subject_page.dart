@@ -753,15 +753,6 @@ class _MobileDetail extends StatefulWidget {
 
 class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 2, vsync: this);
-  int _tabIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) setState(() => _tabIndex = _tabController.index);
-    });
-  }
 
   @override
   void dispose() {
@@ -773,34 +764,90 @@ class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderS
   Widget build(BuildContext context) {
     final detail = widget.detail;
     final repository = widget.repository;
-    return ListView(
-      children: [
-        _header(detail),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(detail.summary),
+    // NestedScrollView with a pinned tab header: the info sections
+    // scroll away, but the 相关视频 / 评论 switch stays at the top
+    // while the tab content scrolls beneath it. (Previously the
+    // TabBar lived inside the page ListView and scrolled away with
+    // the content, so switching tabs mid-comments meant scrolling
+    // all the way back up.) Each tab keeps its own scroll offset
+    // via its PageStorageKey when switching back and forth.
+    return NestedScrollView(
+      headerSliverBuilder: (_, __) => [
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              _header(detail),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(detail.summary),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _trailersPreview(context, detail.trailers),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _celebritiesRow(context, detail.celebrities, repository),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _photosPreview(context, detail, repository),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _trailersPreview(context, detail.trailers),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _PinnedTabBarDelegate(
+            TabBar(
+              controller: _tabController,
+              tabs: const [Tab(text: '相关视频'), Tab(text: '评论')],
+            ),
+          ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _celebritiesRow(context, detail.celebrities, repository),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _photosPreview(context, detail, repository),
-        ),
-        const SizedBox(height: 16),
-        TabBar(
-          controller: _tabController,
-          tabs: const [Tab(text: '相关视频'), Tab(text: '评论')],
-        ),
-        if (_tabIndex == 0) _relatedSection(detail, repository) else _commentsSection(detail, repository),
       ],
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          ListView(
+            key: const PageStorageKey('mobile-related'),
+            children: [_relatedSection(detail, repository)],
+          ),
+          ListView(
+            key: const PageStorageKey('mobile-comments'),
+            children: [_commentsSection(detail, repository)],
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// Pinned tab header for the mobile detail page: exactly the
+/// TabBar's own height, so the bar sticks to the top without a gap
+/// or a clip once the info sections have scrolled away.
+class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  const _PinnedTabBarDelegate(this.tabBar);
+
+  final TabBar tabBar;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_PinnedTabBarDelegate oldDelegate) => tabBar != oldDelegate.tabBar;
 }
 
 /// Right-tab content: related subjects (tap navigates to their
