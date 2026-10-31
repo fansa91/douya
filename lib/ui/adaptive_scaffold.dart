@@ -26,6 +26,16 @@ class AdaptiveScaffold extends StatefulWidget {
 class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
   int _index = 0;
 
+  /// Ticked by the desktop top-bar refresh button (Discover only);
+  /// HomePage's feed listens and re-fetches the first page.
+  final _discoverRefresh = ValueNotifier<int>(0);
+
+  @override
+  void dispose() {
+    _discoverRefresh.dispose();
+    super.dispose();
+  }
+
   static const _labels = ['发现', '书影音', '排行榜', '小组', '我的'];
   static const _icons = [
     Icons.explore_outlined,
@@ -47,7 +57,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
         return UserPage(repository: widget.repository);
       case 0:
       default:
-        return HomePage(repository: widget.repository);
+        return HomePage(repository: widget.repository, refreshListenable: _discoverRefresh);
     }
   }
 
@@ -133,6 +143,14 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
                           ),
                           const SizedBox(width: 12),
                           const Chip(label: Text('访客模式')),
+                          if (_index == 0) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.refresh),
+                              tooltip: '刷新',
+                              onPressed: () => _discoverRefresh.value++,
+                            ),
+                          ],
                           const SizedBox(width: 8),
                           IconButton(
                             icon: const Icon(Icons.settings_outlined),

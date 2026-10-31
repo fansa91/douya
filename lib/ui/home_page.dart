@@ -21,9 +21,14 @@ import 'widgets.dart';
 /// detail, review taps open the review detail, and any other type
 /// falls back to the share link in a browser.
 class HomePage extends StatelessWidget {
-  const HomePage({super.key, required this.repository});
+  const HomePage({super.key, required this.repository, this.refreshListenable});
 
   final DoubanRepository repository;
+
+  /// Ticked by the desktop top-bar refresh button; the feed listens
+  /// and re-fetches the first page. Null on mobile (pull-to-refresh
+  /// only) and in any caller that does not offer a refresh button.
+  final ValueNotifier<int>? refreshListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +40,10 @@ class HomePage extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 600) {
           return CenteredWidth(
-            child: _FeedList(repository: repository),
+            child: _FeedList(repository: repository, refreshListenable: refreshListenable),
           );
         }
-        return _FeedList(repository: repository, masonry: true);
+        return _FeedList(repository: repository, masonry: true, refreshListenable: refreshListenable);
       },
     );
   }
@@ -48,10 +53,11 @@ class HomePage extends StatelessWidget {
 /// scroll view) because it lives inside the Discover ListView;
 /// desktop builds its own CustomScrollView with a masonry sliver.
 class _FeedList extends StatefulWidget {
-  const _FeedList({required this.repository, this.masonry = false});
+  const _FeedList({required this.repository, this.masonry = false, this.refreshListenable});
 
   final DoubanRepository repository;
   final bool masonry;
+  final ValueNotifier<int>? refreshListenable;
 
   @override
   State<_FeedList> createState() => _FeedListState();
@@ -68,22 +74,27 @@ class _FeedListState extends State<_FeedList> {
   @override
   void initState() {
     super.initState();
+    widget.refreshListenable?.addListener(_onRefreshTick);
     _loadInitial();
   }
 
   @override
   void dispose() {
+    widget.refreshListenable?.removeListener(_onRefreshTick);
     _scrollController.dispose();
     super.dispose();
   }
 
+  void _onRefreshTick() => _refresh();
+
   /// Re-fetch the first page and replace the list (the recommend
   /// feed rotates per request, verified 2026-10-31, so a refresh
-  /// does bring new items). Used by pull-to-refresh only: tapping
-  /// the Discover destination is deliberately not a refresh
-  /// (2026-10-31). Unlike the initial load it keeps the current
-  /// items on screen; a failure with items shown only toasts, and
-  /// with an empty list it restores the error view.
+  /// does bring new items). Triggered by pull-to-refresh and by
+  /// the desktop top-bar refresh button; tapping the Discover
+  /// destination is deliberately not a refresh (2026-10-31).
+  /// Unlike the initial load it keeps the current items on
+  /// screen; a failure with items shown only toasts, and with
+  /// an empty list it restores the error view.
   Future<void> _refresh() async {
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
     try {
