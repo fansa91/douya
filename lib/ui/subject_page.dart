@@ -386,6 +386,106 @@ class _PagedReviewsState extends State<_PagedReviews> {
   }
 }
 
+/// Paged photo grid. Starts from the first page fetchSubject
+/// already loaded and pages by the API total (photos support
+/// start/count, verified 2026-10-31). [fillViewport] is true for
+/// the mobile tab (the grid fills the tab, footer below it) and
+/// false for the desktop column (shrink-wrapped grid inside the
+/// scrolling detail column). Preview URLs always come from the
+/// full loaded list, not just the first page.
+class _PagedPhotos extends StatefulWidget {
+  const _PagedPhotos({
+    required this.repository,
+    required this.type,
+    required this.id,
+    required this.initialItems,
+    required this.total,
+    required this.fillViewport,
+  });
+
+  final DoubanRepository repository;
+  final String type;
+  final String id;
+  final List<Photo> initialItems;
+  final int total;
+  final bool fillViewport;
+
+  @override
+  State<_PagedPhotos> createState() => _PagedPhotosState();
+}
+
+class _PagedPhotosState extends State<_PagedPhotos> {
+  late List<Photo> _items = widget.initialItems;
+  late int _total = widget.total;
+  bool _loadingMore = false;
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || (_total > 0 && _items.length >= _total)) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository.fetchSubjectPhotos(widget.type, widget.id, start: _items.length, count: 20);
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...result.items];
+          if (result.total > 0) _total = result.total;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = _items.map((p) => p.url).whereType<String>().toList();
+    final grid = GridView.builder(
+      padding: const EdgeInsets.all(16),
+      shrinkWrap: !widget.fillViewport,
+      physics: widget.fillViewport ? null : const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
+      itemCount: _items.length,
+      itemBuilder: (_, i) {
+        final p = _items[i];
+        final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
+        if (displayUrl == null) return const Icon(Icons.image_outlined);
+        final index = urls.indexOf(p.url!);
+        return GestureDetector(
+          onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
+          child: Hero(
+            tag: p.url!,
+            child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
+          ),
+        );
+      },
+    );
+    final hasMore = _total > 0 && _items.length < _total;
+    final footer = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          if (_total > 0) Text('已加载 ${_items.length} / $_total'),
+          const SizedBox(height: 8),
+          if (hasMore)
+            FilledButton(
+              onPressed: _loadingMore ? null : _loadMore,
+              child: Text(_loadingMore ? '加载中…' : '加载更多'),
+            )
+          else
+            const Text('已全部加载'),
+        ],
+      ),
+    );
+    if (widget.fillViewport) {
+      return Column(children: [Expanded(child: grid), footer]);
+    }
+    return Column(children: [grid, footer]);
+  }
+}
+
 /// Long review full text page. Content arrives as plain text
 /// (ReviewDetail.fromJson strips the API's HTML); photos from the
 /// review detail are not shown yet.
@@ -464,31 +564,13 @@ class _MobileDetail extends StatelessWidget {
                 ]),
                 detail.photos.isEmpty
                     ? const EmptyState(message: '暂无剧照')
-                    : Builder(
-                        builder: (context) {
-                          final urls = detail.photos
-                              .map((p) => p.url)
-                              .whereType<String>()
-                              .toList();
-                          return GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
-                            itemCount: detail.photos.length,
-                            itemBuilder: (_, i) {
-                              final p = detail.photos[i];
-                              final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
-                              if (displayUrl == null) return const Icon(Icons.image_outlined);
-                              final index = urls.indexOf(p.url!);
-                              return GestureDetector(
-                                onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
-                                child: Hero(
-                                  tag: p.url!,
-                                  child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
-                                ),
-                              );
-                            },
-                          );
-                        },
+                    : _PagedPhotos(
+                        repository: repository,
+                        type: detail.subject.type,
+                        id: detail.subject.id,
+                        initialItems: detail.photos,
+                        total: detail.photosTotal,
+                        fillViewport: true,
                       ),
                 ListView(children: [_celebrityList(detail.celebrities, repository)]),
                 ListView(
@@ -577,29 +659,13 @@ class _DesktopDetail extends StatelessWidget {
                   const SizedBox(height: 24),
                   const Text('剧照', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Builder(
-                    builder: (context) {
-                      final urls = detail.photos
-                          .map((p) => p.url)
-                          .whereType<String>()
-                          .toList();
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
-                        itemCount: detail.photos.length,
-                        itemBuilder: (_, i) {
-                          final p = detail.photos[i];
-                          final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
-                          if (displayUrl == null) return const Icon(Icons.image_outlined);
-                          final index = urls.indexOf(p.url!);
-                          return GestureDetector(
-                            onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
-                            child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
-                          );
-                        },
-                      );
-                    },
+                  _PagedPhotos(
+                    repository: repository,
+                    type: detail.subject.type,
+                    id: detail.subject.id,
+                    initialItems: detail.photos,
+                    total: detail.photosTotal,
+                    fillViewport: false,
                   ),
                 ],
               ],

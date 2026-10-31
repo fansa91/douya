@@ -26,6 +26,12 @@ abstract class DoubanRepository {
   /// converted to plain text by ReviewDetail.fromJson). The
   /// /{type}/{id}/review/{id} form is 404 and must not be used.
   Future<ReviewDetail> fetchReview(String reviewId);
+
+  /// Paged subject photos: /{type}/{id}/photos with start/count +
+  /// total (verified 2026-10-31 for movie 1292052: total 942,
+  /// start=10 returns a different page). Failures surface to the
+  /// UI as a SnackBar, like the paged comments.
+  Future<PhotoListResult> fetchSubjectPhotos(String type, String id, {int start = 0, int count = 20});
   Future<List<Subject>> fetchSuggest(String query);
   Future<List<Subject>> fetchSearch(String query);
   Future<SearchSubjectsResult> fetchSearchSubjects(String query, {String? type, int start = 0, int count = 20});

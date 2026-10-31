@@ -222,6 +222,7 @@ class SubjectDetail {
     this.episodesInfo = '',
     this.commentsTotal = 0,
     this.reviewsTotal = 0,
+    this.photosTotal = 0,
     this.genres = const [],
     this.comments = const [],
     this.reviews = const [],
@@ -241,6 +242,10 @@ class SubjectDetail {
   /// loads only the first 10 of each; the tabs page from there.
   final int commentsTotal;
   final int reviewsTotal;
+
+  /// Total for the paged photo grid (e.g. 942 for movie 1292052).
+  /// Unlike comments/reviews, photos page with start/count.
+  final int photosTotal;
 
   /// Book author (detail['author'], a list of strings) and music
   /// singer (detail['singer'], a list of {name}) share this field;
@@ -819,6 +824,13 @@ class TopicListResult {
   const TopicListResult({this.items = const [], this.total = 0});
 
   final List<GroupTopic> items;
+  final int total;
+}
+
+class PhotoListResult {
+  const PhotoListResult({this.items = const [], this.total = 0});
+
+  final List<Photo> items;
   final int total;
 }
 

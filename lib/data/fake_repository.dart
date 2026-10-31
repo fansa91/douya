@@ -264,6 +264,14 @@ Future<ReviewListResult> fetchSubjectReviews(String type, String id, {int start 
 }
 
 @override
+@override
+Future<PhotoListResult> fetchSubjectPhotos(String type, String id, {int start = 0, int count = 20}) async {
+  // The fake detail carries no photos, so the paged photo grid has
+  // nothing to page through offline.
+  return const PhotoListResult();
+}
+
+@override
 Future<ReviewDetail> fetchReview(String reviewId) async {
   return const ReviewDetail(
     id: '1000369',

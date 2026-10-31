@@ -300,7 +300,14 @@ class RealDoubanRepository implements DoubanRepository {
       _safeGet('/api/v2/$type/$id/photos', {'start': 0, 'count': 10}),
       _safeGetList('/api/v2/$type/$id/recommendations'),
       _safeGet('/api/v2/$type/$id/related_doulists', {'start': 0, 'count': 10}),
-      _safeGet('/api/v2/$type/$id/celebrities', {'start': 0, 'count': 10}),
+      // Celebrities do NOT page: start is ignored (start=10 returns
+      // the same first actors) and count caps the response at 1
+      // director + 13 actors (verified 2026-10-31 for movie 1292052:
+      // total says 68, but count=100 and count=200 return the same
+      // 14 people). So fetchSubject takes the largest useful page
+      // once, and the celebrity list has no load-more: what the
+      // endpoint returns IS the full available cast list.
+      _safeGet('/api/v2/$type/$id/celebrities', {'start': 0, 'count': 100}),
     ]);
     final interests = results[0] as Map<String, dynamic>;
     final reviews = results[1] as Map<String, dynamic>;
@@ -331,6 +338,7 @@ class RealDoubanRepository implements DoubanRepository {
       episodesInfo: detail['episodes_info'] is String ? detail['episodes_info'] as String : '',
       commentsTotal: (interests['total'] as num?)?.toInt() ?? 0,
       reviewsTotal: (reviews['total'] as num?)?.toInt() ?? 0,
+      photosTotal: (photos['total'] as num?)?.toInt() ?? 0,
       genres: ((detail['genres'] as List?) ?? []).map((e) => '$e').toList(),
       comments: _parseList(interests['interests'], ShortComment.fromJson),
       reviews: _parseList(reviews['reviews'], Review.fromJson),
@@ -669,6 +677,18 @@ class RealDoubanRepository implements DoubanRepository {
       total: (data['total'] as num?)?.toInt() ?? 0,
       groups: _parseList(data['tags'], TagGroup.fromJson),
       sorts: _parseList(data['sorts'], TagSort.fromJson),
+    );
+  }
+
+  @override
+  Future<PhotoListResult> fetchSubjectPhotos(String type, String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet(
+      '/api/v2/$type/$id/photos',
+      {'start': start, 'count': count},
+    );
+    return PhotoListResult(
+      items: _parseList(data['photos'], Photo.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
     );
   }
 
