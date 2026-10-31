@@ -26,28 +26,6 @@ class AdaptiveScaffold extends StatefulWidget {
 class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
   int _index = 0;
 
-  /// Ticked when the already-selected Discover destination is
-  /// tapped again; HomePage listens and refreshes its feed.
-  final _discoverRefresh = ValueNotifier<int>(0);
-
-  @override
-  void dispose() {
-    _discoverRefresh.dispose();
-    super.dispose();
-  }
-
-  void _selectDestination(int i) {
-    if (i == _index && i == 0) {
-      // Tapping the current Discover destination used to be a
-      // no-op (same index, no state rebuild), so the feed never
-      // refreshed that way. Other destinations keep the plain
-      // switch behavior.
-      _discoverRefresh.value++;
-    } else {
-      setState(() => _index = i);
-    }
-  }
-
   static const _labels = ['发现', '书影音', '排行榜', '小组', '我的'];
   static const _icons = [
     Icons.explore_outlined,
@@ -69,7 +47,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
         return UserPage(repository: widget.repository);
       case 0:
       default:
-        return HomePage(repository: widget.repository, refreshListenable: _discoverRefresh);
+        return HomePage(repository: widget.repository);
     }
   }
 
@@ -103,7 +81,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
             body: body,
             bottomNavigationBar: NavigationBar(
               selectedIndex: _index,
-              onDestinationSelected: _selectDestination,
+              onDestinationSelected: (i) => setState(() => _index = i),
               destinations: [
                 for (var i = 0; i < _labels.length; i++)
                   NavigationDestination(icon: Icon(_icons[i]), label: _labels[i]),
@@ -118,7 +96,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
               NavigationRail(
                 extended: extended,
                 selectedIndex: _index,
-                onDestinationSelected: _selectDestination,
+                onDestinationSelected: (i) => setState(() => _index = i),
                 labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
                 leading: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
