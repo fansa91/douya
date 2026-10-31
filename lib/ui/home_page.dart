@@ -21,9 +21,15 @@ import 'widgets.dart';
 /// detail, review taps open the review detail, and any other type
 /// falls back to the share link in a browser.
 class HomePage extends StatelessWidget {
-  const HomePage({super.key, required this.repository});
+  const HomePage({super.key, required this.repository, this.refreshListenable});
 
   final DoubanRepository repository;
+
+  /// Ticked by the shell when the already-selected Discover
+  /// destination is tapped again: tapping it used to be a no-op
+  /// (same index, no state rebuild), so the feed never refreshed
+  /// that way. The feed also supports pull-to-refresh.
+  final Listenable? refreshListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +41,10 @@ class HomePage extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 600) {
           return CenteredWidth(
-            child: _FeedList(repository: repository),
+            child: _FeedList(repository: repository, refreshListenable: refreshListenable),
           );
         }
-        return _FeedList(repository: repository, masonry: true);
+        return _FeedList(repository: repository, masonry: true, refreshListenable: refreshListenable);
       },
     );
   }
@@ -48,10 +54,11 @@ class HomePage extends StatelessWidget {
 /// scroll view) because it lives inside the Discover ListView;
 /// desktop builds its own CustomScrollView with a masonry sliver.
 class _FeedList extends StatefulWidget {
-  const _FeedList({required this.repository, this.masonry = false});
+  const _FeedList({required this.repository, this.masonry = false, this.refreshListenable});
 
   final DoubanRepository repository;
   final bool masonry;
+  final Listenable? refreshListenable;
 
   @override
   State<_FeedList> createState() => _FeedListState();
@@ -63,11 +70,50 @@ class _FeedListState extends State<_FeedList> {
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _error;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadInitial();
+    widget.refreshListenable?.addListener(_onRefreshTick);
+  }
+
+  @override
+  void dispose() {
+    widget.refreshListenable?.removeListener(_onRefreshTick);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onRefreshTick() {
+    _refresh();
+  }
+
+  /// Re-fetch the first page and replace the list (the recommend
+  /// feed rotates per request, verified 2026-10-31, so a refresh
+  /// does bring new items). Used by pull-to-refresh and by tapping
+  /// the Discover destination. Unlike the initial load it keeps the
+  /// current items on screen; a failure with items shown only
+  /// toasts, and with an empty list it restores the error view.
+  Future<void> _refresh() async {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    try {
+      final result = await widget.repository.fetchRecommendFeed(start: 0, count: 20);
+      if (!mounted) return;
+      setState(() {
+        _items = result.items;
+        _hasMore = result.hasMore;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_items.isEmpty) {
+        setState(() => _error = '$e');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('刷新失败：$e')));
+      }
+    }
   }
 
   Future<void> _loadInitial() async {
@@ -168,9 +214,13 @@ class _FeedListState extends State<_FeedList> {
       );
     }
     if (!widget.masonry) {
-      return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _items.length + 2,
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView.builder(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          itemCount: _items.length + 2,
         itemBuilder: (context, i) {
           if (i == 0) {
             return const Column(
@@ -187,6 +237,7 @@ class _FeedListState extends State<_FeedList> {
           }
           return _footer();
         },
+        ),
       );
     }
     // Desktop masonry: column count from c001apk's formula
@@ -195,8 +246,12 @@ class _FeedListState extends State<_FeedList> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = ((constraints.maxWidth - 32 + 12) / 372).floor().clamp(1, 4);
-        return CustomScrollView(
-          slivers: [
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -223,7 +278,8 @@ class _FeedListState extends State<_FeedList> {
                 child: Center(child: _footer()),
               ),
             ),
-          ],
+            ],
+          ),
         );
       },
     );

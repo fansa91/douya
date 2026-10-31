@@ -111,38 +111,41 @@ class _FacetedViewState extends State<FacetedView> {
     _search(reset: true);
   }
 
-  /// One filter as a dropdown: label on the left, select on the right.
-  /// [options] are (value, display) pairs; a null value means 全部.
-  Widget _dropdownRow(String label, String? value, List<MapEntry<String?, String>> options, ValueChanged<String?> onChanged) {
+  /// One filter as a compact dropdown chip for the horizontal
+  /// filter row: bold label + the current value, bordered like a
+  /// chip. [options] are (value, display) pairs; a null value
+  /// means 全部. (Previously each filter was a full-width labeled
+  /// row; the rows stacked to a full screen before the results.)
+  Widget _dropdownChip(String label, String? value, List<MapEntry<String?, String>> options, ValueChanged<String?> onChanged) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 44,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            child: DropdownButtonFormField<String?>(
-              initialValue: options.any((o) => o.key == value) ? value : null,
-              hint: Text(label),
-              isExpanded: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.only(right: 8),
+      child: Container(
+        padding: const EdgeInsets.only(left: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: options.any((o) => o.key == value) ? value : null,
+                hint: const Text('全部'),
+                items: [
+                  for (final option in options)
+                    DropdownMenuItem<String?>(
+                      value: option.key,
+                      child: Text(option.value, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: onChanged,
               ),
-              items: [
-                for (final option in options)
-                  DropdownMenuItem<String?>(
-                    value: option.key,
-                    child: Text(option.value, overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-              onChanged: onChanged,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -156,39 +159,47 @@ class _FacetedViewState extends State<FacetedView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _dropdownRow(
-                '排序',
-                _sort,
-                [for (final sort in _sorts) MapEntry(sort.name, sort.text)],
-                (value) {
-                  if (value == null || value == _sort) return;
-                  setState(() => _sort = value);
-                  _search(reset: true);
-                },
-              ),
-              Row(
-                children: [
-                  const Text('仅看可播放', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Switch(
-                    value: _playable,
-                    onChanged: (value) {
-                      setState(() => _playable = value);
-                      _search(reset: true);
-                    },
-                  ),
-                ],
-              ),
-              for (final group in _selectableGroups)
-                _dropdownRow(
-                  group.type,
-                  _selected[group.type],
-                  [
-                    const MapEntry<String?, String>(null, '全部'),
-                    for (final value in group.values)
-                      if (!value.startsWith('全部')) MapEntry<String?, String>(value, value),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _dropdownChip(
+                      '排序',
+                      _sort,
+                      [for (final sort in _sorts) MapEntry(sort.name, sort.text)],
+                      (value) {
+                        if (value == null || value == _sort) return;
+                        setState(() => _sort = value);
+                        _search(reset: true);
+                      },
+                    ),
+                    for (final group in _selectableGroups)
+                      _dropdownChip(
+                        group.type,
+                        _selected[group.type],
+                        [
+                          const MapEntry<String?, String>(null, '全部'),
+                          for (final value in group.values)
+                            if (!value.startsWith('全部')) MapEntry<String?, String>(value, value),
+                        ],
+                        (value) => _select(group.type, value),
+                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('仅看可播放', style: TextStyle(fontWeight: FontWeight.bold)),
+                        Switch(
+                          value: _playable,
+                          onChanged: (value) {
+                            setState(() => _playable = value);
+                            _search(reset: true);
+                          },
+                        ),
+                      ],
+                    ),
                   ],
-                  (value) => _select(group.type, value),
                 ),
+              ),
               const Text(
                 '注：筛选结果可能混有电影与剧集形式，形式维度暂不支持单选。',
                 style: TextStyle(fontSize: 12, color: Colors.grey),

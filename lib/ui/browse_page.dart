@@ -231,31 +231,41 @@ class _BrowsePageState extends State<BrowsePage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Wrap(
-            spacing: 8,
-            children: [
-              for (final c in _categories)
-                ChoiceChip(
-                  label: Text(browseCategoryLabels[c]!),
-                  selected: _category == c,
-                  onSelected: (_) => _selectCategory(c),
-                ),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final c in _categories)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(browseCategoryLabels[c]!),
+                      selected: _category == c,
+                      onSelected: (_) => _selectCategory(c),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         if (_category != 'recommend')
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Wrap(
-              spacing: 8,
-              children: [
-                for (final f in filters)
-                  ChoiceChip(
-                    label: Text(f.label),
-                    selected: _filter == f.id,
-                    onSelected: (_) => _selectFilter(f.id),
-                  ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final f in filters)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(f.label),
+                        selected: _filter == f.id,
+                        onSelected: (_) => _selectFilter(f.id),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         Expanded(
