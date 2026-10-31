@@ -24,29 +24,29 @@ Widget _trailerSection(BuildContext context, List<Trailer> trailers) {
       const SizedBox(height: 16),
       const Text('预告片', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
-      for (final trailer in trailers)
+      for (var i = 0; i < trailers.length; i++)
         ListTile(
-          leading: trailer.coverUrl == null
+          leading: trailers[i].coverUrl == null
               ? const Icon(Icons.play_circle_outlined)
               : ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
-                    trailer.coverUrl!,
+                    trailers[i].coverUrl!,
                     width: 72,
                     height: 48,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => const Icon(Icons.play_circle_outlined),
                   ),
                 ),
-          title: Text(trailer.title.isNotEmpty ? trailer.title : '预告片'),
-          subtitle: trailer.runtime.isNotEmpty ? Text(trailer.runtime) : null,
+          title: Text(trailers[i].title.isNotEmpty ? trailers[i].title : '预告片'),
+          subtitle: trailers[i].runtime.isNotEmpty ? Text(trailers[i].runtime) : null,
           trailing: const Icon(Icons.play_arrow),
-          onTap: trailer.videoUrl == null || trailer.videoUrl!.isEmpty
+          onTap: trailers[i].videoUrl == null || trailers[i].videoUrl!.isEmpty
               ? null
               : () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => VideoPreviewPage(trailer: trailer),
+                      builder: (_) => VideoPreviewPage(trailers: trailers, initialIndex: i),
                     ),
                   );
                 },
