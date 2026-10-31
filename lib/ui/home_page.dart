@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -253,7 +254,7 @@ class _FeedCard extends StatelessWidget {
                   if (item.authorAvatar != null && item.authorAvatar!.isNotEmpty)
                     CircleAvatar(
                       radius: 16,
-                      backgroundImage: NetworkImage(item.authorAvatar!),
+                      backgroundImage: doubanImageProvider(item.authorAvatar!),
                     )
                   else
                     const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16)),
@@ -280,12 +281,13 @@ class _FeedCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    item.photoUrls.first,
+                  child: CachedNetworkImage(
+                    imageUrl: item.photoUrls.first,
+                    httpHeaders: doubanImageHeaders,
                     height: 160,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined),
+                    errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
                   ),
                 ),
               ],

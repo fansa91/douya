@@ -419,7 +419,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                         ListTile(
                           leading: group.avatar == null
                               ? null
-                              : CircleAvatar(backgroundImage: NetworkImage(group.avatar!)),
+                              : CircleAvatar(backgroundImage: doubanImageProvider(group.avatar!)),
                           title: Text(group.name),
                           subtitle: Text('${group.memberCount} 成员'),
                           onTap: () {
@@ -452,7 +452,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                     itemBuilder: (_, i) => ListTile(
                       leading: _users[i].avatar == null
                           ? null
-                          : CircleAvatar(backgroundImage: NetworkImage(_users[i].avatar!)),
+                          : CircleAvatar(backgroundImage: doubanImageProvider(_users[i].avatar!)),
                       title: Text(_users[i].name),
                       subtitle: _users[i].abstractText.isEmpty
                           ? null

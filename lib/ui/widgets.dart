@@ -1,7 +1,24 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../data/settings.dart';
 import '../models/models.dart';
+
+/// Headers every remote image load must carry. Douban's image CDN
+/// (img*.doubanio.com) returns 418 with no Referer and 403 for Dart's
+/// default user-agent, so a bare Image.network / NetworkImage fails
+/// for every poster, still and avatar (verified live 2026-10-31:
+/// bare -> 418, browser UA + Referer -> 200).
+const doubanImageHeaders = <String, String>{
+  'Referer': 'https://m.douban.com/',
+  'User-Agent':
+      'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36',
+};
+
+/// Image provider with the headers above, for CircleAvatar and
+/// other ImageProvider slots.
+ImageProvider<Object> doubanImageProvider(String url) =>
+    CachedNetworkImageProvider(url, headers: doubanImageHeaders);
 
 /// Poster card for grids. [isDoulist] subjects render a list badge
 /// instead of a rating, because Rexxar recommend items are mixed cards.
@@ -30,11 +47,12 @@ class SubjectPosterCard extends StatelessWidget {
                   ? Center(child: Text(subject.title.isEmpty ? '?' : subject.title[0]))
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        pic,
+                      child: CachedNetworkImage(
+                        imageUrl: pic,
+                        httpHeaders: doubanImageHeaders,
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) => Center(
+                        errorWidget: (context, url, error) => Center(
                           child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
                         ),
                       ),
@@ -79,7 +97,12 @@ class SubjectRow extends StatelessWidget {
             ? const Icon(Icons.book_outlined)
             : ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: Image.network(pic, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                child: CachedNetworkImage(
+                  imageUrl: pic,
+                  httpHeaders: doubanImageHeaders,
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => const Icon(Icons.book_outlined),
+                ),
               ),
       ),
       title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),

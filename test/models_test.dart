@@ -193,6 +193,46 @@ void main() {
       expect(fromUrl.urlLarge, isNull);
     });
 
+    test('Photo accepts size objects for large/normal (photos endpoint shape)', () {
+      // Live 2026-10-31: the photos endpoint and later feed pages
+      // return image.large / image.normal as {url, width, height,
+      // size} objects, not URL strings. A blind `as String?` cast on
+      // them threw and killed the whole feed/detail page.
+      final photo = Photo.fromJson(<String, dynamic>{
+        'id': '3',
+        'image': <String, dynamic>{
+          'large': <String, dynamic>{'url': 'https://img.example/big.jpg', 'width': 1080, 'height': 720, 'size': 12345},
+          'normal': <String, dynamic>{'url': 'https://img.example/mid.jpg', 'width': 540, 'height': 360, 'size': 6789},
+        },
+      });
+      expect(photo.url, 'https://img.example/big.jpg');
+      expect(photo.urlLarge, 'https://img.example/big.jpg');
+      expect(photo.urlSmall, 'https://img.example/mid.jpg');
+    });
+
+    test('FeedItem keeps photos whose image sizes are objects', () {
+      final item = FeedItem.fromJson(<String, dynamic>{
+        'id': '503570060',
+        'type': 'topic',
+        'content': <String, dynamic>{
+          'id': '503570060',
+          'title': '',
+          'abstract': '正文',
+          'author': <String, dynamic>{'name': '示例用户', 'avatar': 'https://img.example/a.jpg'},
+          'photos': <dynamic>[
+            <String, dynamic>{
+              'id': '9',
+              'image': <String, dynamic>{
+                'large': <String, dynamic>{'url': 'https://img.example/p1.jpg', 'width': 800, 'height': 600},
+                'normal': <String, dynamic>{'url': 'https://img.example/p1s.jpg', 'width': 400, 'height': 300},
+              },
+            },
+          ],
+        },
+      });
+      expect(item.photoUrls, ['https://img.example/p1.jpg']);
+    });
+
     test('ReviewDetail strips HTML to plain text', () {
       final review = ReviewDetail.fromJson(<String, dynamic>{
         'id': 1000369,

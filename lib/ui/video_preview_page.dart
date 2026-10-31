@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/models.dart';
+import 'widgets.dart';
 
 /// Video preview for Frodo trailers. The video_url comes from the
 /// subject detail's `trailers` field at runtime (verified 2026-10-31
@@ -327,10 +329,11 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
                     alignment: Alignment.center,
                     children: [
                       if (trailer.coverUrl != null && trailer.coverUrl!.isNotEmpty)
-                        Image.network(
-                          trailer.coverUrl!,
+                        CachedNetworkImage(
+                          imageUrl: trailer.coverUrl!,
+                          httpHeaders: doubanImageHeaders,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                          errorWidget: (context, url, error) => const SizedBox.shrink(),
                         ),
                       const CircularProgressIndicator(color: Colors.white),
                     ],

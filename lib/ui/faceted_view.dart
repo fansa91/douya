@@ -110,7 +110,9 @@ class _FacetedViewState extends State<FacetedView> {
     _search(reset: true);
   }
 
-  Widget _chipRow(String label, List<Widget> chips) {
+  /// One filter as a dropdown: label on the left, select on the right.
+  /// [options] are (value, display) pairs; a null value means 全部.
+  Widget _dropdownRow(String label, String? value, List<MapEntry<String?, String>> options, ValueChanged<String?> onChanged) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -121,9 +123,22 @@ class _FacetedViewState extends State<FacetedView> {
             child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: chips),
+            child: DropdownButtonFormField<String?>(
+              initialValue: options.any((o) => o.key == value) ? value : null,
+              hint: Text(label),
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: [
+                for (final option in options)
+                  DropdownMenuItem<String?>(
+                    value: option.key,
+                    child: Text(option.value, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: onChanged,
             ),
           ),
         ],
@@ -140,23 +155,15 @@ class _FacetedViewState extends State<FacetedView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _chipRow(
+              _dropdownRow(
                 '排序',
-                [
-                  for (final sort in _sorts)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(sort.text),
-                        selected: _sort == sort.name,
-                        onSelected: (_) {
-                          if (_sort == sort.name) return;
-                          setState(() => _sort = sort.name);
-                          _search(reset: true);
-                        },
-                      ),
-                    ),
-                ],
+                _sort,
+                [for (final sort in _sorts) MapEntry(sort.name, sort.text)],
+                (value) {
+                  if (value == null || value == _sort) return;
+                  setState(() => _sort = value);
+                  _search(reset: true);
+                },
               ),
               Row(
                 children: [
@@ -171,31 +178,15 @@ class _FacetedViewState extends State<FacetedView> {
                 ],
               ),
               for (final group in _selectableGroups)
-                _chipRow(
+                _dropdownRow(
                   group.type,
+                  _selected[group.type],
                   [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: const Text('全部'),
-                        selected: !_selected.containsKey(group.type),
-                        onSelected: (_) => _select(group.type, null),
-                      ),
-                    ),
+                    const MapEntry<String?, String>(null, '全部'),
                     for (final value in group.values)
-                      if (!value.startsWith('全部'))
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(value),
-                            selected: _selected[group.type] == value,
-                            onSelected: (_) => _select(
-                              group.type,
-                              _selected[group.type] == value ? null : value,
-                            ),
-                          ),
-                        ),
+                      if (!value.startsWith('全部')) MapEntry<String?, String>(value, value),
                   ],
+                  (value) => _select(group.type, value),
                 ),
               const Text(
                 '注：筛选结果可能混有电影与剧集形式，形式维度暂不支持单选。',

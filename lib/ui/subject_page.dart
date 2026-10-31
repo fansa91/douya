@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
@@ -42,12 +43,13 @@ Widget _trailerSection(BuildContext context, List<Trailer> trailers) {
               ? const Icon(Icons.play_circle_outlined)
               : ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    trailers[i].coverUrl!,
+                  child: CachedNetworkImage(
+                    imageUrl: trailers[i].coverUrl!,
+                    httpHeaders: doubanImageHeaders,
                     width: 72,
                     height: 48,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.play_circle_outlined),
+                    errorWidget: (context, url, error) => const Icon(Icons.play_circle_outlined),
                   ),
                 ),
           title: Text(trailers[i].title.isNotEmpty ? trailers[i].title : '预告片'),
@@ -122,7 +124,7 @@ Widget _header(SubjectDetail detail) {
                   ? const Icon(Icons.book_outlined)
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(displayPic, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                      child: CachedNetworkImage(imageUrl: displayPic, httpHeaders: doubanImageHeaders, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.book_outlined)),
                     ),
             ),
           ),
@@ -457,7 +459,7 @@ class _PagedPhotosState extends State<_PagedPhotos> {
           onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
           child: Hero(
             tag: p.url!,
-            child: Image.network(displayUrl, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_outlined)),
+            child: CachedNetworkImage(imageUrl: displayUrl, httpHeaders: doubanImageHeaders, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.image_outlined)),
           ),
         );
       },
@@ -616,7 +618,7 @@ class _DesktopDetail extends StatelessWidget {
                     onTap: () => _openImagePreview(context, [detail.subject.pic!], 0),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(subjectImageUrl(detail.subject, SettingsStore.instance.imageQuality) ?? detail.subject.pic!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.book_outlined)),
+                      child: CachedNetworkImage(imageUrl: subjectImageUrl(detail.subject, SettingsStore.instance.imageQuality) ?? detail.subject.pic!, httpHeaders: doubanImageHeaders, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.book_outlined)),
                     ),
                   ),
                 const SizedBox(height: 12),

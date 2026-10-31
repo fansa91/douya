@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_view/photo_view.dart';
+import 'widgets.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:share_plus/share_plus.dart';
@@ -67,7 +68,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
   }
 
   CachedNetworkImageProvider _providerFor(int index) {
-    final provider = _providers.putIfAbsent(index, () => CachedNetworkImageProvider(widget.urls[index]));
+    final provider = _providers.putIfAbsent(index, () => CachedNetworkImageProvider(widget.urls[index], headers: doubanImageHeaders));
     if (!_imageSizes.containsKey(index) && !_imageListeners.containsKey(index)) {
       final stream = provider.resolve(const ImageConfiguration());
       late final ImageStreamListener listener;

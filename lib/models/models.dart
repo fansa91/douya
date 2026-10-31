@@ -3,6 +3,20 @@
 /// and some fields are absent on some types.
 library;
 
+/// Extract a URL from a value that may be a plain string or a size
+/// object {url, width, height, size}. The photos endpoint (and later
+/// feed pages) return image.large / image.normal as size objects,
+/// not strings (verified live 2026-10-31); a blind `as String?` cast
+/// on them throws and kills the whole feed/detail page.
+String? imageUrlOf(dynamic value) {
+  if (value is String) return value;
+  if (value is Map) {
+    final url = value['url'];
+    if (url is String) return url;
+  }
+  return null;
+}
+
 class Rating {
   const Rating({required this.value, required this.max, this.count = 0});
 
@@ -98,13 +112,13 @@ class Subject {
     String? pic;
     final rawPic = json['pic'];
     if (rawPic is Map) {
-      pic = rawPic['large'] as String? ?? rawPic['normal'] as String?;
+      pic = imageUrlOf(rawPic['large']) ?? imageUrlOf(rawPic['normal']);
     } else if (rawPic is String) {
       pic = rawPic;
     }
     final rawCover = json['cover'];
     if (pic == null && rawCover is Map) {
-      pic = rawCover['large'] as String? ?? rawCover['normal'] as String?;
+      pic = imageUrlOf(rawCover['large']) ?? imageUrlOf(rawCover['normal']);
     }
     pic ??= json['cover_url'] as String? ?? (rawCover is String ? rawCover : null);
     final images = json['images'];
@@ -337,7 +351,7 @@ class SearchGroup {
     if (rawAvatar is String) {
       avatar = rawAvatar;
     } else if (rawAvatar is Map) {
-      avatar = rawAvatar['large'] as String? ?? rawAvatar['normal'] as String?;
+      avatar = imageUrlOf(rawAvatar['large']) ?? imageUrlOf(rawAvatar['normal']);
     }
     return SearchGroup(
       id: '${json['id'] ?? ''}',
@@ -511,13 +525,13 @@ class Photo {
     String? urlLarge;
     String? urlSmall;
     if (image is Map) {
-      urlLarge = image['large'] as String?;
-      urlSmall = image['normal'] as String?;
+      urlLarge = imageUrlOf(image['large']);
+      urlSmall = imageUrlOf(image['normal']);
       url = urlLarge ?? urlSmall;
     } else if (image is String) {
       url = image;
     }
-    url ??= json['url'] as String?;
+    url ??= imageUrlOf(json['url']);
     return Photo(
       id: '${json['id'] ?? ''}',
       url: url,
@@ -547,7 +561,7 @@ class Celebrity {
     final avatar = json['avatar'];
     String? avatarUrl;
     if (avatar is Map) {
-      avatarUrl = avatar['large'] as String? ?? avatar['normal'] as String?;
+      avatarUrl = imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
     }
     return Celebrity(
       id: '${json['id'] ?? ''}',
@@ -590,7 +604,7 @@ class UserProfile {
     final avatar = json['avatar'];
     String? avatarUrl;
     if (avatar is Map) {
-      avatarUrl = avatar['large'] as String? ?? avatar['normal'] as String?;
+      avatarUrl = imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
     } else if (avatar is String) {
       avatarUrl = avatar;
     }
@@ -644,7 +658,7 @@ String? authorAvatarOf(dynamic author) {
   if (author is! Map) return null;
   final avatar = author['avatar'];
   if (avatar is String) return avatar;
-  if (avatar is Map) return avatar['large'] as String? ?? avatar['normal'] as String?;
+  if (avatar is Map) return imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
   return null;
 }
 
@@ -906,7 +920,7 @@ class FeedItem {
     if (avatar is String) {
       authorAvatar = avatar;
     } else if (avatar is Map<String, dynamic>) {
-      authorAvatar = avatar['large'] as String? ?? avatar['normal'] as String?;
+      authorAvatar = imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
     }
     final photoUrls = <String>[];
     if (content['photos'] is List) {

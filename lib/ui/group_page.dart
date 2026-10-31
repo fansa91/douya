@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
@@ -165,7 +166,7 @@ class _GroupPageState extends State<GroupPage> {
                 const SizedBox(width: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(topic.coverUrl!, width: 72, height: 72, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox(width: 72, height: 72)),
+                  child: CachedNetworkImage(imageUrl: topic.coverUrl!, httpHeaders: doubanImageHeaders, width: 72, height: 72, fit: BoxFit.cover, errorWidget: (context, url, error) => const SizedBox(width: 72, height: 72)),
                 ),
               ],
             ],
@@ -244,7 +245,7 @@ class _GroupPageState extends State<GroupPage> {
                 borderRadius: BorderRadius.circular(24),
                 child: group.avatar == null || group.avatar!.isEmpty
                     ? const SizedBox(width: 48, height: 48, child: Icon(Icons.group_outlined))
-                    : Image.network(group.avatar!, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.group_outlined)),
+                    : CachedNetworkImage(imageUrl: group.avatar!, httpHeaders: doubanImageHeaders, width: 48, height: 48, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.group_outlined)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -530,7 +531,7 @@ class TopicDetailView extends StatelessWidget {
   /// it does not (the topic/comment payloads do not always).
   Widget _authorAvatar(String? url) {
     if (url != null && url.isNotEmpty) {
-      return CircleAvatar(radius: 16, backgroundImage: NetworkImage(url));
+      return CircleAvatar(radius: 16, backgroundImage: doubanImageProvider(url));
     }
     return const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16));
   }
