@@ -90,6 +90,11 @@ abstract class DoubanRepository {
 
   /// Paged group topics with a verified sort (new = 最新, hot = 热门).
   Future<TopicListResult> fetchGroupTopicsPaged(String groupId, String sort, {int start = 0, int count = 20});
+
+  /// Full group object for the detail-page header (name, member
+  /// count, description, avatars): Frodo /group/{id}, signed, guest
+  /// 200 (verified 2026-10-31, e.g. 146409 上海租房）.
+  Future<SearchGroup> fetchGroupDetail(String groupId);
   Future<TopicDetail> fetchTopic(String topicId);
   Future<CelebrityDetail> fetchCelebrity(String id);
 }

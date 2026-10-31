@@ -342,6 +342,22 @@ void main() {
       expect(htmlImageUrls('<p>纯文字，无图</p>'), isEmpty);
     });
 
+    test('SearchGroup parses the Frodo group detail shape', () {
+      final group = SearchGroup.fromJson({
+        'id': 146409,
+        'name': '上海租房',
+        'member_count': 1274004,
+        'desc': '欢迎来到【上海租房】小组！',
+        'avatar': 'https://img3.doubanio.com/view/group/sqxs/public/04274397c7f3583.webp',
+        'large_avatar': 'https://img3.doubanio.com/view/group/medium/public/04274397c7f3583.webp',
+      });
+      expect(group.id, '146409');
+      expect(group.name, '上海租房');
+      expect(group.memberCount, 1274004);
+      expect(group.description, '欢迎来到【上海租房】小组！');
+      expect(group.largeAvatar, contains('/medium/'));
+    });
+
     test('ReviewDetail strips HTML to plain text', () {
       final review = ReviewDetail.fromJson(<String, dynamic>{
         'id': 1000369,

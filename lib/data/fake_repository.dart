@@ -241,6 +241,11 @@ Future<TopicListResult> fetchGroupTopicsPaged(String groupId, String sort, {int 
 }
 
 @override
+Future<SearchGroup> fetchGroupDetail(String groupId) async {
+  return SearchGroup(id: groupId, name: '示例小组', memberCount: 1494, description: '离线示例，真实数据走 Frodo /group/{id}');
+}
+
+@override
 Future<TopicDetail> fetchTopic(String topicId) async {
 return const TopicDetail(
 topic: GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东'),

@@ -741,6 +741,12 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<SearchGroup> fetchGroupDetail(String groupId) async {
+    final data = await _client.signedGet('/api/v2/group/$groupId');
+    return SearchGroup.fromJson(data);
+  }
+
+  @override
   Future<TopicDetail> fetchTopic(String topicId) async {
     final results = await Future.wait([
       _client.signedGet('/api/v2/group/topic/$topicId'),

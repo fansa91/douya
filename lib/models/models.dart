@@ -366,6 +366,7 @@ class SearchGroup {
     required this.id,
     required this.name,
     this.avatar,
+    this.largeAvatar,
     this.memberCount = 0,
     this.description = '',
   });
@@ -373,6 +374,10 @@ class SearchGroup {
   final String id;
   final String name;
   final String? avatar;
+
+  /// Medium avatar from the group detail response (`large_avatar`);
+  /// the detail-page header prefers this over the small `avatar`.
+  final String? largeAvatar;
   final int memberCount;
   final String description;
 
@@ -393,6 +398,7 @@ class SearchGroup {
       id: '${json['id'] ?? ''}',
       name: (json['name'] as String?) ?? '',
       avatar: avatar,
+      largeAvatar: json['large_avatar'] as String?,
       memberCount: int.tryParse('${json['member_count'] ?? 0}') ?? 0,
       description: (json['desc_abstract'] as String?) ?? (json['desc'] as String?) ?? (json['description'] as String?) ?? '',
     );
