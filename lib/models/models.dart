@@ -17,6 +17,25 @@ String? imageUrlOf(dynamic value) {
   return null;
 }
 
+/// Strip an HTML body to plain text. Topic detail content arrives
+/// as HTML (`<div id='content'><p ...>...</p></div>`, sometimes with
+/// image wrappers); shown raw it leaks literal tags into the page
+/// (reported 2026-10-31). Long-review content uses the same shape.
+String htmlToPlainText(String raw) {
+  return raw
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n\n')
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+}
+
 class Rating {
   const Rating({required this.value, required this.max, this.count = 0});
 
@@ -169,6 +188,7 @@ class RankBoard {
     this.description = '',
     this.subjectCount = 0,
     this.showRank = false,
+    this.previewSubjects = const [],
   });
 
   final String id;
@@ -176,6 +196,12 @@ class RankBoard {
   final String description;
   final int subjectCount;
   final bool showRank;
+
+  /// Preview subjects embedded in the boards index response (3 per
+  /// board). The numeric boards' full items endpoint 404s on both
+  /// Rexxar and Frodo (verified 2026-10-31), so the board detail
+  /// page falls back to these when its items call fails.
+  final List<Subject> previewSubjects;
 
   factory RankBoard.fromJson(Map<String, dynamic> json) {
     return RankBoard(
@@ -450,19 +476,7 @@ class ReviewDetail {
     final user = json['user'];
     String name = '';
     if (user is Map) name = (user['name'] as String?) ?? '';
-    final raw = (json['content'] as String?) ?? '';
-    final plain = raw
-        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n\n')
-        .replaceAll(RegExp(r'<[^>]*>'), '')
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-        .trim();
+    final plain = htmlToPlainText((json['content'] as String?) ?? '');
     return ReviewDetail(
       id: '${json['id'] ?? ''}',
       title: (json['title'] as String?) ?? '',

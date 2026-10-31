@@ -233,6 +233,23 @@ void main() {
       expect(item.photoUrls, ['https://img.example/p1.jpg']);
     });
 
+    test('htmlToPlainText strips topic detail HTML wrappers', () {
+      // Live topic content shape (2026-10-31): a div/p wrapper, and
+      // sometimes image wrappers whose img tags carry no text.
+      expect(
+        htmlToPlainText("<div id='content'><p data-align=\"left\">“朴素”的朴树</p></div>"),
+        '“朴素”的朴树',
+      );
+      expect(
+        htmlToPlainText("<div id='content'><p>第一段</p><p>第二段 &amp; 实体</p></div>"),
+        '第一段\n\n第二段 & 实体',
+      );
+      expect(
+        htmlToPlainText("<div id='content'><div class=\"image-wrapper\"><img src=\"https://img.example/x.jpg\"></div><p>配图说明</p></div>"),
+        '配图说明',
+      );
+    });
+
     test('ReviewDetail strips HTML to plain text', () {
       final review = ReviewDetail.fromJson(<String, dynamic>{
         'id': 1000369,

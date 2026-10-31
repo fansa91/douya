@@ -203,7 +203,7 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
       appBar: AppBar(title: Text(widget.board.name)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null && _items.isEmpty
+          : _error != null && _items.isEmpty && widget.board.previewSubjects.isEmpty
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -214,6 +214,37 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                     ],
                   ),
                 )
+              : _error != null && _items.isEmpty
+                  // The numeric boards' items endpoint 404s on both
+                  // Rexxar and Frodo (verified 2026-10-31); fall back
+                  // to the preview subjects the boards index embeds,
+                  // and say so, instead of a retry that cannot work.
+                  ? ListView(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            '完整榜单暂无法通过访客接口获取，以下是榜单提供的预览内容。',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                        for (final subject in widget.board.previewSubjects)
+                          SubjectRow(
+                            subject: subject,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => SubjectPage(
+                                    repository: widget.repository,
+                                    type: subject.type,
+                                    id: subject.id,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    )
               : _items.isEmpty
                   ? const Center(child: Text('该榜单暂无内容'))
                   : CenteredWidth(

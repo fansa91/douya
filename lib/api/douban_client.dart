@@ -617,13 +617,20 @@ class RealDoubanRepository implements DoubanRepository {
     if (data is! Map<String, dynamic>) return const [];
     final boards = data['subject_collection_boards'];
     if (boards is! List) return const [];
-    return boards
-        .whereType<Map<String, dynamic>>()
-        .map((b) => b['subject_collection'])
-        .whereType<Map<String, dynamic>>()
-        .map(RankBoard.fromJson)
-        .where((board) => board.id.isNotEmpty && board.name.isNotEmpty)
-        .toList();
+    return boards.whereType<Map<String, dynamic>>().map((b) {
+      final sc = b['subject_collection'];
+      if (sc is! Map<String, dynamic>) return null;
+      final board = RankBoard.fromJson(sc);
+      if (board.id.isEmpty || board.name.isEmpty) return null;
+      return RankBoard(
+        id: board.id,
+        name: board.name,
+        description: board.description,
+        subjectCount: board.subjectCount,
+        showRank: board.showRank,
+        previewSubjects: _parseList(b['subjects'], (j) => Subject.fromJson(j)),
+      );
+    }).whereType<RankBoard>().toList();
   }
 
   @override
@@ -731,7 +738,9 @@ class RealDoubanRepository implements DoubanRepository {
     final group = detail['group'] is Map<String, dynamic> ? detail['group'] as Map<String, dynamic> : null;
     return TopicDetail(
       topic: GroupTopic.fromJson(detail),
-      content: (detail['content'] as String?) ?? '',
+      // Topic content arrives as HTML; shown raw it leaks literal
+      // tags into the detail page (reported 2026-10-31).
+      content: htmlToPlainText((detail['content'] as String?) ?? ''),
       comments: _parseList(comments['comments'], TopicComment.fromJson),
       groupId: '${group?['id'] ?? ''}',
       groupName: (group?['name'] as String?) ?? '',
