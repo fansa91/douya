@@ -31,10 +31,47 @@ class _GroupPageState extends State<GroupPage> {
   String? _error;
   String? _selectedTopicId;
 
+  /// null = hot groups list (the default view); otherwise the topic
+  /// browser for that group id. Discussion featured (讨论精选) is
+  /// deliberately not a view here: it has no JSON API, only
+  /// server-rendered web HTML, and is shelved (2026-10-31).
+  String? _selectedGroupId;
+  List<SearchGroup> _hotGroups = [];
+  bool _hotLoading = true;
+  String? _hotError;
+
   @override
   void initState() {
     super.initState();
     _groupId = _groupController.text.trim();
+    if (widget.initialGroupId != null) {
+      // Opened from search with a group id: go straight to its topics.
+      _selectedGroupId = _groupId;
+      _load();
+    } else {
+      _loadHotGroups();
+    }
+  }
+
+  Future<void> _loadHotGroups() async {
+    setState(() {
+      _hotLoading = true;
+      _hotError = null;
+    });
+    try {
+      final groups = await widget.repository.fetchHotGroups();
+      if (mounted) setState(() => _hotGroups = groups);
+    } catch (e) {
+      if (mounted) setState(() => _hotError = '$e');
+    } finally {
+      if (mounted) setState(() => _hotLoading = false);
+    }
+  }
+
+  void _openGroup(String groupId) {
+    _groupController.text = groupId;
+    _groupId = groupId;
+    _selectedGroupId = groupId;
     _load();
   }
 
@@ -168,38 +205,115 @@ class _GroupPageState extends State<GroupPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+  Widget _idInputRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _groupController,
+              decoration: const InputDecoration(
+                hintText: '输入小组 id，例如 146409',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(999))),
+              ),
+              onSubmitted: (_) => _openGroup(_groupController.text.trim()),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => _openGroup(_groupController.text.trim()),
+            child: const Text('查看'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hotGroupCard(SearchGroup group) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        onTap: () => _openGroup(group.id),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: group.avatar == null || group.avatar!.isEmpty
+                    ? const SizedBox(width: 48, height: 48, child: Icon(Icons.group_outlined))
+                    : Image.network(group.avatar!, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.group_outlined)),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: TextField(
-                  controller: _groupController,
-                  decoration: const InputDecoration(
-                    hintText: '输入小组 id，例如 146409',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(999))),
-                  ),
-                  onSubmitted: (_) {
-                    _groupId = _groupController.text.trim();
-                    _load();
-                  },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('${group.memberCount} 个成员', style: Theme.of(context).textTheme.bodySmall),
+                    if (group.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(group.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: () {
-                  _groupId = _groupController.text.trim();
-                  _load();
-                },
-                child: const Text('查看'),
-              ),
+              const Icon(Icons.chevron_right),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _hotView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _idInputRow(),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('热门小组 · 本周热门趋势榜Top20', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        Expanded(
+          child: _hotLoading
+              ? const LoadingList()
+              : _hotError != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          EmptyState(message: '加载失败：$_hotError'),
+                          FilledButton(onPressed: _loadHotGroups, child: const Text('重试')),
+                        ],
+                      ),
+                    )
+                  : _hotGroups.isEmpty
+                      ? const EmptyState(message: '暂无热门小组')
+                      : ListView.builder(
+                          itemCount: _hotGroups.length,
+                          itemBuilder: (_, i) => _hotGroupCard(_hotGroups[i]),
+                        ),
+        ),
+      ],
+    );
+  }
+
+  Widget _topicView() {
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _selectedGroupId = null),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('热门小组'),
+          ),
+        ),
+        _idInputRow(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: Row(
@@ -245,6 +359,12 @@ class _GroupPageState extends State<GroupPage> {
         ),
       ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_selectedGroupId == null) return _hotView();
+    return _topicView();
   }
 }
 

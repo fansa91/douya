@@ -201,6 +201,28 @@ class SearchGroup {
   final String? avatar;
   final int memberCount;
   final String description;
+
+  /// Tolerant group summary parser. Used by Frodo /search/group_tab
+  /// (avatar is a String, description is desc_abstract) and by Rexxar
+  /// /group/explore top_groups (avatar may be a String or a Map,
+  /// description is desc). Hot-group objects are full group objects,
+  /// so only the summary fields are kept here.
+  factory SearchGroup.fromJson(Map<String, dynamic> json) {
+    final rawAvatar = json['avatar'];
+    String? avatar;
+    if (rawAvatar is String) {
+      avatar = rawAvatar;
+    } else if (rawAvatar is Map) {
+      avatar = rawAvatar['large'] as String? ?? rawAvatar['normal'] as String?;
+    }
+    return SearchGroup(
+      id: '${json['id'] ?? ''}',
+      name: (json['name'] as String?) ?? '',
+      avatar: avatar,
+      memberCount: int.tryParse('${json['member_count'] ?? 0}') ?? 0,
+      description: (json['desc_abstract'] as String?) ?? (json['desc'] as String?) ?? (json['description'] as String?) ?? '',
+    );
+  }
 }
 
 class SearchGroupResult {

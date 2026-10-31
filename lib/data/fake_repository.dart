@@ -170,6 +170,12 @@ createTime: '2026-03-21',
 }
 
 @override
+Future<List<SearchGroup>> fetchHotGroups() async => const [
+      SearchGroup(id: '762280', name: '后会友期', memberCount: 8705, description: '离线示例，真实数据走 Rexxar /group/explore top_groups'),
+      SearchGroup(id: '48007', name: '肖申克的救赎', memberCount: 1494, description: '离线示例，真实数据走 Rexxar /group/explore top_groups'),
+    ];
+
+@override
 Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
 return const [
 GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 3),

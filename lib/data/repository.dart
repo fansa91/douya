@@ -26,6 +26,15 @@ abstract class DoubanRepository {
   Future<List<SearchUser>> fetchSearchUsers(String query, {int start = 0, int count = 20});
   Future<UserProfile> fetchUser(String id);
   Future<List<Interest>> fetchInterests(String userId, String type, String status);
+  /// Hot groups: Rexxar /group/explore, top_groups module
+  /// (本周热门趋势榜Top20), guest-usable without a signature
+  /// (verified 2026-10-31; cross-checked against web
+  /// /group/explore/hot_groups). NOT Frodo/Rexxar
+  /// /group/recommend_feed_groups, which returns {"items":[]} for guests.
+  /// Discussion featured (讨论精选) is deliberately NOT here: it has
+  /// no JSON API, only server-rendered web HTML, and is shelved.
+  Future<List<SearchGroup>> fetchHotGroups();
+
   Future<List<GroupTopic>> fetchGroupTopics(String groupId);
 
   /// Paged group topics with a verified sort (new = 最新, hot = 热门).

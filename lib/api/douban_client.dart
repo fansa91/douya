@@ -510,6 +510,35 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<List<SearchGroup>> fetchHotGroups() async {
+    // Rexxar /group/explore (unsigned, guest 200, 2026-10-31):
+    // {"feed": [...]} with a top_groups module (本周热门趋势榜Top20,
+    // 20 full group objects). The other modules (category_tags,
+    // groups_sets, groups/你可能感兴趣) are ignored here. This is the
+    // web-API equivalent of web /group/explore/hot_groups, verified
+    // by matching first entry + member count across both sources.
+    // Referer matches the probe (m.douban.com), not the movie referer
+    // used by the subject Rexxar calls.
+    final dio = Dio();
+    final response = await dio.get(
+      'https://m.douban.com/rexxar/api/v2/group/explore',
+      queryParameters: {'start': 0, 'count': 20},
+      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+    );
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return const [];
+    final feed = data['feed'];
+    if (feed is! List) return const [];
+    for (final module in feed.whereType<Map<String, dynamic>>()) {
+      if (module['type'] != 'top_groups') continue;
+      return _parseList(module['groups'], SearchGroup.fromJson)
+          .where((group) => group.id.isNotEmpty && group.name.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  @override
   Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
     final result = await fetchGroupTopicsPaged(groupId, 'new', start: 0, count: 20);
     return result.items;
