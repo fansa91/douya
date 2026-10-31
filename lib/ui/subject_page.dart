@@ -7,6 +7,17 @@ import 'image_preview_page.dart';
 import 'video_preview_page.dart';
 import 'widgets.dart';
 
+/// TV episodes line, or null when the detail carries neither field
+/// (movie/book/music). episodes_info is a status string, not an
+/// episode list, so this is a single summary line, not a list.
+String? _episodesText(SubjectDetail detail) {
+  final parts = <String>[];
+  if (detail.episodesInfo.isNotEmpty) parts.add(detail.episodesInfo);
+  if (detail.episodesCount > 0) parts.add('共${detail.episodesCount}集');
+  if (parts.isEmpty) return null;
+  return '集数：${parts.join(' · ')}';
+}
+
 void _openImagePreview(BuildContext context, List<String> urls, int index) {
   if (urls.isEmpty) return;
   Navigator.of(context).push(
@@ -124,6 +135,7 @@ Widget _header(SubjectDetail detail) {
               if (detail.directors.isNotEmpty) Text('导演：${detail.directors.join(' / ')}'),
               if (detail.actors.isNotEmpty) Text('主演：${detail.actors.join(' / ')}'),
               if (detail.authors.isNotEmpty) Text('${s.type == 'music' ? '歌手' : '作者'}：${detail.authors.join(' / ')}'),
+              if (_episodesText(detail) != null) Text(_episodesText(detail)!),
               const SizedBox(height: 12),
               if (s.rating != null) RatingText(rating: s.rating!),
             ],
@@ -143,6 +155,29 @@ Widget _commentList(List<ShortComment> comments) {
           title: Text(c.userName),
           subtitle: Text(c.text, maxLines: 3, overflow: TextOverflow.ellipsis),
           trailing: c.rating != null ? RatingText(rating: c.rating!, community: false) : null,
+        ),
+    ],
+  );
+}
+
+/// Mobile celebrity tab content. Celebrities are already fetched
+/// by fetchSubject (desktop already shows them); mobile previously
+/// had no celebrity section at all.
+Widget _celebrityList(List<Celebrity> celebrities, DoubanRepository repository) {
+  if (celebrities.isEmpty) return const EmptyState(message: '暂无影人');
+  return Column(
+    children: [
+      for (final c in celebrities)
+        Builder(
+          builder: (context) => ListTile(
+            title: Text(c.name),
+            subtitle: c.character == null || c.character!.isEmpty ? null : Text(c.character!),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => CelebrityPage(repository: repository, id: c.id)),
+              );
+            },
+          ),
         ),
     ],
   );
@@ -171,7 +206,7 @@ class _MobileDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Column(
         children: [
           _header(detail),
@@ -183,7 +218,7 @@ class _MobileDetail extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _trailerSection(context, detail.trailers),
           ),
-          const TabBar(tabs: [Tab(text: '短评'), Tab(text: '长评'), Tab(text: '剧照'), Tab(text: '相关')]),
+          const TabBar(tabs: [Tab(text: '短评'), Tab(text: '长评'), Tab(text: '剧照'), Tab(text: '影人'), Tab(text: '相关')]),
           Expanded(
             child: TabBarView(
               children: [
@@ -216,6 +251,7 @@ class _MobileDetail extends StatelessWidget {
                           );
                         },
                       ),
+                ListView(children: [_celebrityList(detail.celebrities, repository)]),
                 ListView(
                   children: [
                     for (final s in detail.recommendations)
@@ -268,6 +304,7 @@ class _DesktopDetail extends StatelessWidget {
                 if (detail.directors.isNotEmpty) Text('导演：${detail.directors.join(' / ')}'),
                 if (detail.actors.isNotEmpty) Text('主演：${detail.actors.join(' / ')}'),
                 if (detail.authors.isNotEmpty) Text('${detail.subject.type == 'music' ? '歌手' : '作者'}：${detail.authors.join(' / ')}'),
+                if (_episodesText(detail) != null) Text(_episodesText(detail)!),
                 const Divider(),
                 const Text('影人', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),

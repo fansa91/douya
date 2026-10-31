@@ -305,6 +305,8 @@ class RealDoubanRepository implements DoubanRepository {
         ...((detail['author'] as List?) ?? []).map((e) => '$e'),
         ...((detail['singer'] as List?) ?? []).map(nameOf),
       ],
+      episodesCount: (detail['episodes_count'] as num?)?.toInt() ?? 0,
+      episodesInfo: detail['episodes_info'] is String ? detail['episodes_info'] as String : '',
       genres: ((detail['genres'] as List?) ?? []).map((e) => '$e').toList(),
       comments: _parseList(interests['interests'], ShortComment.fromJson),
       reviews: _parseList(reviews['reviews'], Review.fromJson),

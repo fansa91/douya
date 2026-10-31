@@ -120,6 +120,8 @@ class SubjectDetail {
     this.directors = const [],
     this.actors = const [],
     this.authors = const [],
+    this.episodesCount = 0,
+    this.episodesInfo = '',
     this.genres = const [],
     this.comments = const [],
     this.reviews = const [],
@@ -139,6 +141,12 @@ class SubjectDetail {
   /// singer (detail['singer'], a list of {name}) share this field;
   /// movie/tv leave it empty and use directors/actors instead.
   final List<String> authors;
+
+  /// TV only. episodes_count is the total (e.g. 29); episodes_info
+  /// is a status string (e.g. 更新至22集), NOT an episode list, so
+  /// there is no per-episode data to show behind this line.
+  final int episodesCount;
+  final String episodesInfo;
   final List<String> genres;
   final List<ShortComment> comments;
   final List<Review> reviews;
