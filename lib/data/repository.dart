@@ -45,6 +45,18 @@ abstract class DoubanRepository {
   /// no JSON API, only server-rendered web HTML, and is shelved.
   Future<List<SearchGroup>> fetchHotGroups();
 
+  /// Ranking boards for one tag category (numeric tag id, see
+  /// RankBoard): Rexxar /tag/{tagId}/subject_collection_boards,
+  /// unsigned, guest-usable (verified 2026-10-31). Each board's
+  /// items come from fetchBoardItems.
+  Future<List<RankBoard>> fetchRankBoards(String tagId);
+
+  /// Paged items of one ranking board: Rexxar
+  /// /subject_collection/{boardId}/items, unsigned, guest-usable
+  /// (verified 2026-10-31, e.g. movie_top250 total 250, items carry
+  /// rank/rank_value). `total` is the API's total.
+  Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count = 20});
+
   Future<List<GroupTopic>> fetchGroupTopics(String groupId);
 
   /// Paged group topics with a verified sort (new = 最新, hot = 热门).

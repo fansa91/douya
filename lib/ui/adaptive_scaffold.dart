@@ -4,6 +4,7 @@ import '../data/repository.dart';
 import 'browse_page.dart';
 import 'group_page.dart';
 import 'home_page.dart';
+import 'rankings_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 import 'user_page.dart';
@@ -25,10 +26,11 @@ class AdaptiveScaffold extends StatefulWidget {
 class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
   int _index = 0;
 
-  static const _labels = ['发现', '书影音', '小组', '我的'];
+  static const _labels = ['发现', '书影音', '排行榜', '小组', '我的'];
   static const _icons = [
     Icons.explore_outlined,
     Icons.movie_outlined,
+    Icons.leaderboard_outlined,
     Icons.group_outlined,
     Icons.person_outlined,
   ];
@@ -38,8 +40,10 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
       case 1:
         return BrowsePage(repository: widget.repository);
       case 2:
-        return GroupPage(repository: widget.repository);
+        return RankingsPage(repository: widget.repository);
       case 3:
+        return GroupPage(repository: widget.repository);
+      case 4:
         return UserPage(repository: widget.repository);
       case 0:
       default:

@@ -176,6 +176,30 @@ Future<List<SearchGroup>> fetchHotGroups() async => const [
     ];
 
 @override
+Future<List<RankBoard>> fetchRankBoards(String tagId) async {
+  // Only the one board whose id + subject count were verified by
+  // probing (6月豆瓣电影口碑榜Top20, id 1818, 159 subjects, tag 49).
+  if (tagId != '49') return const [];
+  return const [
+    RankBoard(id: '1818', name: '6月豆瓣电影口碑榜Top20', subjectCount: 159, showRank: true),
+  ];
+}
+
+@override
+Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count = 20}) async {
+  const ranked = Subject(
+    id: '1292052',
+    type: 'movie',
+    title: '肖申克的救赎',
+    rating: Rating(value: 9.7, max: 10, count: 3354509),
+    year: '1994',
+    cardSubtitle: '剧情 / 犯罪',
+    rank: 1,
+  );
+  return const BrowseResult(items: [ranked], total: 1);
+}
+
+@override
 Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
 return const [
 GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 3),

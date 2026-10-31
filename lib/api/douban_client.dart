@@ -572,6 +572,51 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<List<RankBoard>> fetchRankBoards(String tagId) async {
+    // Rexxar /tag/{tagId}/subject_collection_boards (unsigned,
+    // guest 200, 2026-10-31). Referer matches the probe
+    // (m.douban.com), as in fetchHotGroups. Tag ids are numeric:
+    // 49 = 影视, 2 = 音乐, 3 = 图书, 42 = 游戏; a tag NAME here 404s.
+    final dio = Dio();
+    final response = await dio.get(
+      'https://m.douban.com/rexxar/api/v2/tag/$tagId/subject_collection_boards',
+      queryParameters: {'start': 0, 'count': 50},
+      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+    );
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return const [];
+    final boards = data['subject_collection_boards'];
+    if (boards is! List) return const [];
+    return boards
+        .whereType<Map<String, dynamic>>()
+        .map((b) => b['subject_collection'])
+        .whereType<Map<String, dynamic>>()
+        .map(RankBoard.fromJson)
+        .where((board) => board.id.isNotEmpty && board.name.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count = 20}) async {
+    // Rexxar /subject_collection/{boardId}/items (unsigned, guest
+    // 200, 2026-10-31), called exactly as probed: start/count only,
+    // no items_only/for_mobile extras. Items carry rank/rank_value,
+    // parsed into Subject.rank.
+    final dio = Dio();
+    final response = await dio.get(
+      'https://m.douban.com/rexxar/api/v2/subject_collection/$boardId/items',
+      queryParameters: {'start': start, 'count': count},
+      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+    );
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return const BrowseResult();
+    return BrowseResult(
+      items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
   Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
     final result = await fetchGroupTopicsPaged(groupId, 'new', start: 0, count: 20);
     return result.items;

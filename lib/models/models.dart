@@ -38,6 +38,7 @@ class Subject {
     this.cardSubtitle,
     this.isDoulist = false,
     this.doulistCount,
+    this.rank,
   });
 
   final String id;
@@ -50,6 +51,10 @@ class Subject {
   final String? cardSubtitle;
   final bool isDoulist;
   final int? doulistCount;
+
+  /// Position inside a ranking board, from the collection item's
+  /// `rank` (fallback `rank_value`); null for non-ranking lists.
+  final int? rank;
 
   factory Subject.fromJson(Map<String, dynamic> json, {String fallbackType = 'movie'}) {
     String? pic;
@@ -80,9 +85,48 @@ class Subject {
       cardSubtitle: json['card_subtitle'] as String?,
       isDoulist: (json['doulist_type'] as String?) != null || itemType == 'doulist',
       doulistCount: (json['items_count'] as num?)?.toInt(),
+      rank: (json['rank'] as num?)?.toInt() ?? (json['rank_value'] as num?)?.toInt(),
     );
   }
 }
+
+/// One ranking board from Rexxar
+/// /tag/{tagId}/subject_collection_boards: the `subject_collection`
+/// object inside each board entry. Tag ids verified 2026-10-31:
+/// 49 = 影视 (30 boards), 2 = 音乐 (27), 3 = 图书 (18), 42 = 游戏 (2).
+class RankBoard {
+  const RankBoard({
+    required this.id,
+    required this.name,
+    this.description = '',
+    this.subjectCount = 0,
+    this.showRank = false,
+  });
+
+  final String id;
+  final String name;
+  final String description;
+  final int subjectCount;
+  final bool showRank;
+
+  factory RankBoard.fromJson(Map<String, dynamic> json) {
+    return RankBoard(
+      id: '${json['id'] ?? ''}',
+      name: (json['name'] as String?) ?? '',
+      description: (json['description'] as String?) ?? '',
+      subjectCount: (json['subject_count'] as num?)?.toInt() ?? 0,
+      showRank: json['show_rank'] as bool? ?? false,
+    );
+  }
+}
+
+/// Ranking board categories shown on the rankings page.
+const rankBoardCategories = <String, String>{
+  '49': '影视',
+  '2': '音乐',
+  '3': '图书',
+  '42': '游戏',
+};
 
 class Trailer {
   const Trailer({
