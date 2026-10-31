@@ -95,6 +95,11 @@ class _SettingsDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = SettingsStore.instance;
+    // Version comes from the release tag via --dart-define=APP_VERSION
+    // (release.yml sets it from the tag on tag builds, 'dev' on any
+    // other build); it is never hard-coded here, so About always
+    // shows this build's own release version.
+    const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
     return AnimatedBuilder(
       animation: settings,
       builder: (context, _) {
@@ -257,6 +262,10 @@ class _SettingsDetail extends StatelessWidget {
                 leading: Image.asset('assets/logo.png', width: 48, height: 48),
                 title: const Text('douya'),
                 subtitle: const Text('豆瓣访客只读客户端 · 首个发布 v0.1'),
+              ),
+              const ListTile(
+                title: Text('版本'),
+                subtitle: Text(appVersion == 'dev' ? '开发版（本地构建，未走 tag 发布）' : appVersion),
               ),
               const ListTile(
                 title: Text('访客模式'),

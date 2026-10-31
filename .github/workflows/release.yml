@@ -41,6 +41,10 @@ on:
 
 env:
   FLUTTER_VERSION: '3.47.7'
+  # Settings About version: the release tag on tag builds (v0.2),
+  # 'dev' on dispatch/local builds. Passed to every platform build
+  # as --dart-define=APP_VERSION; never hard-coded in the app.
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
 
 permissions:
   contents: write
@@ -137,7 +141,8 @@ jobs:
           flutter build apk --release --split-per-abi \
             --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
             --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
-            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }} \
+            --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
       - name: Rename APKs
         run: |
@@ -191,7 +196,8 @@ jobs:
           flutter build ipa --release --no-codesign \
             --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
             --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
-            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }} \
+            --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
       - name: Package unsigned IPA
         run: |
@@ -256,7 +262,8 @@ jobs:
           flutter build macos --release \
             --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} \
             --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} \
-            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+            --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }} \
+            --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
       - name: Create DMG (unsigned)
         run: |
@@ -315,7 +322,7 @@ jobs:
       - run: flutter pub get
       - name: Build Windows (unsigned)
         run: |
-          flutter build windows --release --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }}
+          flutter build windows --release --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }} --dart-define=DOUBAN_API_KEY=${{ secrets.DOUBAN_API_KEY }} --dart-define=DOUBAN_API_SECRET=${{ secrets.DOUBAN_API_SECRET }} --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
       - name: Zip
         shell: pwsh
