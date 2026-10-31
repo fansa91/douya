@@ -81,6 +81,7 @@ class _FacetedViewState extends State<FacetedView> {
         }
         _items.addAll(result.items);
         _total = result.total;
+        if (!reset && result.items.isEmpty) _total = _items.length;
         _loading = false;
         _loadingMore = false;
       });
@@ -221,18 +222,10 @@ class _FacetedViewState extends State<FacetedView> {
                           itemBuilder: (context, i) {
                             if (i == _items.length) {
                               final done = _total > 0 && _items.length >= _total;
-                              return Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Center(
-                                  child: done
-                                      ? Text('已全部加载（${_items.length} / $_total）')
-                                      : _loadingMore
-                                          ? const CircularProgressIndicator()
-                                          : OutlinedButton(
-                                              onPressed: () => _search(reset: false),
-                                              child: Text('加载更多（${_items.length} / $_total）'),
-                                            ),
-                                ),
+                              return LoadMoreFooter(
+                                countText: '已加载 ${_items.length} / $_total',
+                                canLoadMore: () => !_loadingMore && !done,
+                                onLoadMore: () => _search(reset: false),
                               );
                             }
                             final subject = _items[i];

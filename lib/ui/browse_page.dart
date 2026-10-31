@@ -82,7 +82,8 @@ class _RecommendSections extends StatelessWidget {
 
 /// Browse by category + filter, paged. "正在热映" is a movie filter here,
 /// not on the home page. Switching category/filter resets the list;
-/// "加载更多" appends until items reach the API total.
+/// scrolling near the bottom auto-loads more until items reach the
+/// API total (LoadMoreFooter, no button).
 class BrowsePage extends StatefulWidget {
   const BrowsePage({super.key, required this.repository, this.initialCategory, this.initialFilter});
 
@@ -174,6 +175,10 @@ class _BrowsePageState extends State<BrowsePage> {
         setState(() {
           _items = [..._items, ...result.items];
           if (result.total > 0) _total = result.total;
+          // An empty page with items still outstanding means the
+          // list is exhausted; without this the auto-load footer
+          // below would re-trigger forever.
+          if (result.items.isEmpty) _total = _items.length;
         });
       }
     } catch (e) {
@@ -282,52 +287,45 @@ class _BrowsePageState extends State<BrowsePage> {
                             // stretching 4-5 posters across any window.
                             final contentWidth = constraints.maxWidth > 1440 ? 1440.0 : constraints.maxWidth;
                             final columns = ((contentWidth - 48) / 240).floor().clamp(2, 5);
+                            final footer = LoadMoreFooter(
+                              countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+                              canLoadMore: () => !_loadingMore && hasMore,
+                              onLoadMore: _loadMore,
+                            );
                             return CenteredWidth(
                               maxWidth: 1440,
-                              child: Column(
-                              children: [
-                                Expanded(
-                                  child: isGrid
-                                      ? GridView.builder(
+                              child: isGrid
+                                  ? CustomScrollView(
+                                      slivers: [
+                                        SliverPadding(
                                           padding: const EdgeInsets.all(24),
-                                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: columns,
-                                            mainAxisSpacing: 16,
-                                            crossAxisSpacing: 16,
-                                            childAspectRatio: 0.68,
-                                          ),
-                                          itemCount: _items.length,
-                                          itemBuilder: (_, i) => SubjectPosterCard(
-                                            subject: _items[i],
-                                            onTap: () => _openSubject(_items[i]),
-                                          ),
-                                        )
-                                      : ListView.builder(
-                                          itemCount: _items.length,
-                                          itemBuilder: (_, i) => SubjectRow(
-                                            subject: _items[i],
-                                            onTap: () => _openSubject(_items[i]),
+                                          sliver: SliverGrid.builder(
+                                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: columns,
+                                              mainAxisSpacing: 16,
+                                              crossAxisSpacing: 16,
+                                              childAspectRatio: 0.68,
+                                            ),
+                                            itemCount: _items.length,
+                                            itemBuilder: (_, i) => SubjectPosterCard(
+                                              subject: _items[i],
+                                              onTap: () => _openSubject(_items[i]),
+                                            ),
                                           ),
                                         ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    children: [
-                                      if (_total > 0) Text('已加载 ${_items.length} / $_total'),
-                                      const SizedBox(height: 8),
-                                      if (hasMore)
-                                        FilledButton(
-                                          onPressed: _loadingMore ? null : _loadMore,
-                                          child: Text(_loadingMore ? '加载中…' : '加载更多'),
-                                        )
-                                      else
-                                        const Text('已全部加载'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              ),
+                                        SliverToBoxAdapter(child: footer),
+                                      ],
+                                    )
+                                  : ListView.builder(
+                                      itemCount: _items.length + 1,
+                                      itemBuilder: (_, i) {
+                                        if (i >= _items.length) return footer;
+                                        return SubjectRow(
+                                          subject: _items[i],
+                                          onTap: () => _openSubject(_items[i]),
+                                        );
+                                      },
+                                    ),
                             );
                           },
                         ),

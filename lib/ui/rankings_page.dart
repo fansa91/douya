@@ -179,6 +179,7 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
       setState(() {
         _items.addAll(result.items);
         _total = result.total;
+        if (result.items.isEmpty) _total = _items.length;
         _loading = false;
         _loadingMore = false;
       });
@@ -253,18 +254,10 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                       itemBuilder: (context, i) {
                         if (i == _items.length) {
                           final done = _total > 0 && _items.length >= _total;
-                          return Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Center(
-                              child: done
-                                  ? Text('已全部加载（${_items.length} / $_total）')
-                                  : _loadingMore
-                                      ? const CircularProgressIndicator()
-                                      : OutlinedButton(
-                                          onPressed: _loadMore,
-                                          child: Text('加载更多（${_items.length} / $_total）'),
-                                        ),
-                            ),
+                          return LoadMoreFooter(
+                            countText: '已加载 ${_items.length} / $_total',
+                            canLoadMore: () => !_loadingMore && !done,
+                            onLoadMore: _loadMore,
                           );
                         }
                         final subject = _items[i];

@@ -35,14 +35,7 @@ class HomePage extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 600) {
           return CenteredWidth(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                _FeedList(repository: repository),
-              ],
-            ),
+            child: _FeedList(repository: repository),
           );
         }
         return _FeedList(repository: repository, masonry: true);
@@ -136,14 +129,9 @@ class _FeedListState extends State<_FeedList> {
   }
 
   Widget _footer() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: _hasMore
-          ? FilledButton(
-              onPressed: _loadingMore ? null : _loadMore,
-              child: Text(_loadingMore ? '加载中…' : '加载更多'),
-            )
-          : const Text('已全部加载'),
+    return LoadMoreFooter(
+      canLoadMore: () => !_loadingMore && _hasMore,
+      onLoadMore: _loadMore,
     );
   }
 
@@ -180,11 +168,25 @@ class _FeedListState extends State<_FeedList> {
       );
     }
     if (!widget.masonry) {
-      return Column(
-        children: [
-          for (final item in _items) _FeedCard(item: item, onTap: () => _openItem(item)),
-          _footer(),
-        ],
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _items.length + 2,
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            return const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                SizedBox(height: 12),
+              ],
+            );
+          }
+          if (i <= _items.length) {
+            final item = _items[i - 1];
+            return _FeedCard(item: item, onTap: () => _openItem(item));
+          }
+          return _footer();
+        },
       );
     }
     // Desktop masonry: column count from c001apk's formula

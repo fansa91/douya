@@ -196,9 +196,10 @@ class _CommentTileState extends State<_CommentTile> {
 
 /// Paged short comments. Starts from the first page fetchSubject
 /// already loaded and pages by the API total, same pattern as the
-/// group topic list. Used on both mobile (inside a ListView tab)
-/// and desktop (inside the scrolling detail column), so it builds
-/// a Column, not its own scroll view.
+/// Paged short comments. Builds its own ListView.builder (the
+/// mobile tab hosts it directly); [fillViewport] is false for the
+/// desktop column, where it shrink-wraps inside the outer scroll
+/// view instead of owning the scroll.
 class _PagedComments extends StatefulWidget {
   const _PagedComments({
     required this.repository,
@@ -206,6 +207,7 @@ class _PagedComments extends StatefulWidget {
     required this.id,
     required this.initialItems,
     required this.total,
+    required this.fillViewport,
   });
 
   final DoubanRepository repository;
@@ -213,6 +215,7 @@ class _PagedComments extends StatefulWidget {
   final String id;
   final List<ShortComment> initialItems;
   final int total;
+  final bool fillViewport;
 
   @override
   State<_PagedComments> createState() => _PagedCommentsState();
@@ -232,6 +235,7 @@ class _PagedCommentsState extends State<_PagedComments> {
         setState(() {
           _items = [..._items, ...result.items];
           if (result.total > 0) _total = result.total;
+          if (result.items.isEmpty) _total = _items.length;
         });
       }
     } catch (e) {
@@ -247,26 +251,20 @@ class _PagedCommentsState extends State<_PagedComments> {
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const EmptyState(message: '暂无短评');
     final hasMore = _total > 0 && _items.length < _total;
-    return Column(
-      children: [
-        for (final c in _items) _CommentTile(comment: c),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              if (_total > 0) Text('已加载 ${_items.length} / $_total'),
-              const SizedBox(height: 8),
-              if (hasMore)
-                FilledButton(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
-                )
-              else
-                const Text('已全部加载'),
-            ],
-          ),
-        ),
-      ],
+    return ListView.builder(
+      shrinkWrap: !widget.fillViewport,
+      physics: widget.fillViewport ? null : const NeverScrollableScrollPhysics(),
+      itemCount: _items.length + 1,
+      itemBuilder: (context, i) {
+        if (i >= _items.length) {
+          return LoadMoreFooter(
+            countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+            canLoadMore: () => !_loadingMore && hasMore,
+            onLoadMore: _loadMore,
+          );
+        }
+        return _CommentTile(comment: _items[i]);
+      },
     );
   }
 }
@@ -295,7 +293,7 @@ Widget _celebrityList(List<Celebrity> celebrities, DoubanRepository repository) 
 }
 
 /// Paged long reviews. Tap a review to open its full text page.
-/// Same Column-based paging pattern as _PagedComments.
+/// Same ListView.builder paging pattern as _PagedComments.
 class _PagedReviews extends StatefulWidget {
   const _PagedReviews({
     required this.repository,
@@ -303,6 +301,7 @@ class _PagedReviews extends StatefulWidget {
     required this.id,
     required this.initialItems,
     required this.total,
+    required this.fillViewport,
   });
 
   final DoubanRepository repository;
@@ -310,6 +309,7 @@ class _PagedReviews extends StatefulWidget {
   final String id;
   final List<Review> initialItems;
   final int total;
+  final bool fillViewport;
 
   @override
   State<_PagedReviews> createState() => _PagedReviewsState();
@@ -329,6 +329,7 @@ class _PagedReviewsState extends State<_PagedReviews> {
         setState(() {
           _items = [..._items, ...result.items];
           if (result.total > 0) _total = result.total;
+          if (result.items.isEmpty) _total = _items.length;
         });
       }
     } catch (e) {
@@ -344,46 +345,40 @@ class _PagedReviewsState extends State<_PagedReviews> {
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const EmptyState(message: '暂无长评');
     final hasMore = _total > 0 && _items.length < _total;
-    return Column(
-      children: [
-        for (final r in _items)
-          ListTile(
-            title: Text(r.title),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(r.abstract, maxLines: 3, overflow: TextOverflow.ellipsis),
-                if (r.userName.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(r.userName, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ],
-            ),
-            trailing: Text('有用 ${r.usefulCount}'),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => ReviewDetailPage(repository: widget.repository, reviewId: r.id)),
-              );
-            },
-          ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+    return ListView.builder(
+      shrinkWrap: !widget.fillViewport,
+      physics: widget.fillViewport ? null : const NeverScrollableScrollPhysics(),
+      itemCount: _items.length + 1,
+      itemBuilder: (context, i) {
+        if (i >= _items.length) {
+          return LoadMoreFooter(
+            countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+            canLoadMore: () => !_loadingMore && hasMore,
+            onLoadMore: _loadMore,
+          );
+        }
+        final r = _items[i];
+        return ListTile(
+          title: Text(r.title),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (_total > 0) Text('已加载 ${_items.length} / $_total'),
-              const SizedBox(height: 8),
-              if (hasMore)
-                FilledButton(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
-                )
-              else
-                const Text('已全部加载'),
+              Text(r.abstract, maxLines: 3, overflow: TextOverflow.ellipsis),
+              if (r.userName.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(r.userName, style: Theme.of(context).textTheme.bodySmall),
+              ],
             ],
           ),
-        ),
-      ],
+          trailing: Text('有用 ${r.usefulCount}'),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ReviewDetailPage(repository: widget.repository, reviewId: r.id)),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -430,6 +425,7 @@ class _PagedPhotosState extends State<_PagedPhotos> {
         setState(() {
           _items = [..._items, ...result.items];
           if (result.total > 0) _total = result.total;
+          if (result.items.isEmpty) _total = _items.length;
         });
       }
     } catch (e) {
@@ -444,47 +440,40 @@ class _PagedPhotosState extends State<_PagedPhotos> {
   @override
   Widget build(BuildContext context) {
     final urls = _items.map((p) => p.url).whereType<String>().toList();
-    final grid = GridView.builder(
-      padding: const EdgeInsets.all(16),
-      shrinkWrap: !widget.fillViewport,
-      physics: widget.fillViewport ? null : const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
-      itemCount: _items.length,
-      itemBuilder: (_, i) {
-        final p = _items[i];
-        final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
-        if (displayUrl == null) return const Icon(Icons.image_outlined);
-        final index = urls.indexOf(p.url!);
-        return GestureDetector(
-          onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
-          child: Hero(
-            tag: p.url!,
-            child: CachedNetworkImage(imageUrl: displayUrl, httpHeaders: doubanImageHeaders, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.image_outlined)),
-          ),
-        );
-      },
-    );
     final hasMore = _total > 0 && _items.length < _total;
-    final footer = Padding(
+    final footer = LoadMoreFooter(
+      countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+      canLoadMore: () => !_loadingMore && hasMore,
+      onLoadMore: _loadMore,
+    );
+    final gridSliver = SliverPadding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          if (_total > 0) Text('已加载 ${_items.length} / $_total'),
-          const SizedBox(height: 8),
-          if (hasMore)
-            FilledButton(
-              onPressed: _loadingMore ? null : _loadMore,
-              child: Text(_loadingMore ? '加载中…' : '加载更多'),
-            )
-          else
-            const Text('已全部加载'),
-        ],
+      sliver: SliverGrid.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
+        itemCount: _items.length,
+        itemBuilder: (_, i) {
+          final p = _items[i];
+          final displayUrl = photoImageUrl(p, SettingsStore.instance.imageQuality);
+          if (displayUrl == null) return const Icon(Icons.image_outlined);
+          final index = urls.indexOf(p.url!);
+          return GestureDetector(
+            onTap: () => _openImagePreview(context, urls, index < 0 ? 0 : index),
+            child: Hero(
+              tag: p.url!,
+              child: CachedNetworkImage(imageUrl: displayUrl, httpHeaders: doubanImageHeaders, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.image_outlined)),
+            ),
+          );
+        },
       ),
     );
     if (widget.fillViewport) {
-      return Column(children: [Expanded(child: grid), footer]);
+      return CustomScrollView(slivers: [gridSliver, SliverToBoxAdapter(child: footer)]);
     }
-    return Column(children: [grid, footer]);
+    return CustomScrollView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [gridSliver, SliverToBoxAdapter(child: footer)],
+    );
   }
 }
 
@@ -560,12 +549,8 @@ class _MobileDetail extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                ListView(children: [
-                  _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal),
-                ]),
-                ListView(children: [
-                  _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal),
-                ]),
+                _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal, fillViewport: true),
+                _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal, fillViewport: true),
                 detail.photos.isEmpty
                     ? const EmptyState(message: '暂无剧照')
                     : _PagedPhotos(
@@ -659,10 +644,10 @@ class _DesktopDetail extends StatelessWidget {
                 _trailerSection(context, detail.trailers),
                 const SizedBox(height: 24),
                 const Text('短评', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal),
+                _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal, fillViewport: false),
                 const SizedBox(height: 24),
                 const Text('长评', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal),
+                _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal, fillViewport: false),
                 if (detail.photos.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   const Text('剧照', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

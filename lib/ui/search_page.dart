@@ -181,7 +181,10 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       );
       if (!mounted) return;
       setState(() {
-        _subjectsResult = result;
+        // A type-filtered response carries types: [], so keep the
+        // previous type chips instead of dropping them.
+        final types = result.types.isNotEmpty ? result.types : (_subjectsResult?.types ?? result.types);
+        _subjectsResult = SearchSubjectsResult(types: types, items: result.items, total: result.total);
         _subjects = append ? [..._subjects, ...result.items] : result.items;
         _subjectsStart = start + result.items.length;
         _tabLoaded = true;

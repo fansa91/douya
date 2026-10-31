@@ -115,6 +115,7 @@ class _GroupPageState extends State<GroupPage> {
         setState(() {
           _topics = [..._topics, ...result.items];
           if (result.total > 0) _total = result.total;
+          if (result.items.isEmpty) _total = _topics.length;
         });
       }
     } catch (e) {
@@ -178,31 +179,18 @@ class _GroupPageState extends State<GroupPage> {
 
   Widget _topicList({required bool isDesktop}) {
     final hasMore = _total > 0 && _topics.length < _total;
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            itemCount: _topics.length,
-            itemBuilder: (_, i) => _topicCard(_topics[i], isDesktop: isDesktop),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              if (_total > 0) Text('已加载 ${_topics.length} / $_total'),
-              const SizedBox(height: 8),
-              if (hasMore)
-                FilledButton(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
-                )
-              else
-                const Text('已全部加载'),
-            ],
-          ),
-        ),
-      ],
+    return ListView.builder(
+      itemCount: _topics.length + 1,
+      itemBuilder: (_, i) {
+        if (i >= _topics.length) {
+          return LoadMoreFooter(
+            countText: _total > 0 ? '已加载 ${_topics.length} / $_total' : null,
+            canLoadMore: () => !_loadingMore && hasMore,
+            onLoadMore: _loadMore,
+          );
+        }
+        return _topicCard(_topics[i], isDesktop: isDesktop);
+      },
     );
   }
 

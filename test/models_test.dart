@@ -1,3 +1,4 @@
+import 'package:douya/api/douban_client.dart';
 import 'package:douya/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -248,6 +249,61 @@ void main() {
         htmlToPlainText("<div id='content'><div class=\"image-wrapper\"><img src=\"https://img.example/x.jpg\"></div><p>配图说明</p></div>"),
         '配图说明',
       );
+    });
+
+    test('parseSearchSubjects accepts the current top-level items shape', () {
+      // Live 2026-10-31: /search/subjects returns top-level items /
+      // total / types and NO subjects key; reading only the old
+      // subjects-map shape made every subject search return empty.
+      final result = RealDoubanRepository.parseSearchSubjects(<String, dynamic>{
+        'types': <dynamic>[
+          <String, dynamic>{'type': 'movie', 'type_name': '影视', 'total': '21'},
+          <String, dynamic>{'type': 'book', 'type_name': '图书', 'total': '26'},
+        ],
+        'items': <dynamic>[
+          <String, dynamic>{
+            'layout': 'subject',
+            'target_id': '1292052',
+            'target_type': 'movie',
+            'target': <String, dynamic>{
+              'id': '1292052',
+              'title': '肖申克的救赎',
+              'cover_url': 'https://img.example/poster.jpg',
+              'card_subtitle': '1994 / 犯罪 / 剧情',
+              'year': '1994',
+              'rating': <String, dynamic>{'value': 9.7, 'count': 100, 'max': 10},
+            },
+          },
+        ],
+        'total': 21,
+      });
+      expect(result.total, 21);
+      expect(result.types.map((t) => t.type), ['movie', 'book']);
+      expect(result.items.length, 1);
+      expect(result.items.first.id, '1292052');
+      expect(result.items.first.title, '肖申克的救赎');
+    });
+
+    test('parseSearchSubjects still accepts the old subjects-map shape', () {
+      final result = RealDoubanRepository.parseSearchSubjects(<String, dynamic>{
+        'types': <dynamic>[
+          <String, dynamic>{'type': 'movie', 'type_name': '影视', 'total': '21'},
+        ],
+        'subjects': <String, dynamic>{
+          'items': <dynamic>[
+            <String, dynamic>{
+              'layout': 'subject',
+              'target_id': '1292052',
+              'target_type': 'movie',
+              'target': <String, dynamic>{'id': '1292052', 'title': '肖申克的救赎'},
+            },
+          ],
+          'total': '21',
+        },
+      });
+      expect(result.total, 21);
+      expect(result.items.length, 1);
+      expect(result.items.first.id, '1292052');
     });
 
     test('ReviewDetail strips HTML to plain text', () {

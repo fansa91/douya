@@ -81,7 +81,7 @@ class RealDoubanRepository implements DoubanRepository {
 
   final DoubanClient _client;
 
-  List<T> _parseList<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
+  static List<T> _parseList<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
     if (raw is! List) return const [];
     return raw.whereType<Map<String, dynamic>>().map(fromJson).toList().cast<T>();
   }
@@ -355,7 +355,7 @@ class RealDoubanRepository implements DoubanRepository {
   /// Card-shaped search item -> Subject. Shared by /search/subjects,
   /// /search/suggestion cards and /search/hots subjects (the latter
   /// are already flat, so the target branch is skipped for them).
-  Subject _subjectFromSearchItem(Map<String, dynamic> item) {
+  static Subject _subjectFromSearchItem(Map<String, dynamic> item) {
     final target = item['target'];
     final base = target is Map<String, dynamic>
         ? Map<String, dynamic>.from(target)
@@ -366,7 +366,7 @@ class RealDoubanRepository implements DoubanRepository {
     return Subject.fromJson(base, fallbackType: targetType ?? 'movie');
   }
 
-  List<Subject> _subjectsFromItems(dynamic raw) {
+  static List<Subject> _subjectsFromItems(dynamic raw) {
     if (raw is! List) return const [];
     return raw
         .whereType<Map<String, dynamic>>()
@@ -400,10 +400,7 @@ class RealDoubanRepository implements DoubanRepository {
     // signed guest probe (see DOUBAN_GUEST_API.md §2.6/2.7):
     // /search/subjects is the guest-usable subject search (200 for 肖申克,
     // first item 1292052). Do NOT use /search here: it returns 403
-    // code 103 need_login for guests. Response shape:
-    // subjects: {items: [{target_id, target_type, target: {id, title,
-    // cover_url, card_subtitle, year, rating}}], total: "21"},
-    // types: [{type, type_name, total: "21"}] (totals are strings).
+    // code 103 need_login for guests.
     final data = await _client.signedGet(
       '/api/v2/search/subjects',
       {
@@ -413,12 +410,28 @@ class RealDoubanRepository implements DoubanRepository {
         'count': count,
       },
     );
+    return parseSearchSubjects(data);
+  }
+
+  /// Parse a /search/subjects response. Two shapes exist: the
+  /// documented 2026-10-31 shape (subjects: {items, total}) and the
+  /// shape the endpoint actually returns now (top-level items,
+  /// total and types; the subjects key is absent, with or without
+  /// a type filter — verified live 2026-10-31). Reading only the
+  /// old shape made every subject search return empty.
+  static SearchSubjectsResult parseSearchSubjects(Map<String, dynamic> data) {
     final subjects = data['subjects'];
-    if (subjects is! Map<String, dynamic>) return const SearchSubjectsResult();
+    if (subjects is Map<String, dynamic>) {
+      return SearchSubjectsResult(
+        types: _parseList(data['types'], SearchTypeCount.fromJson),
+        items: _subjectsFromItems(subjects['items']),
+        total: _asInt(subjects['total']),
+      );
+    }
     return SearchSubjectsResult(
       types: _parseList(data['types'], SearchTypeCount.fromJson),
-      items: _subjectsFromItems(subjects['items']),
-      total: _asInt(subjects['total']),
+      items: _subjectsFromItems(data['items']),
+      total: _asInt(data['total']),
     );
   }
 

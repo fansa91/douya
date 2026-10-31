@@ -20,6 +20,68 @@ const doubanImageHeaders = <String, String>{
 ImageProvider<Object> doubanImageProvider(String url) =>
     CachedNetworkImageProvider(url, headers: doubanImageHeaders);
 
+/// Footer for paged lists that loads more automatically: it calls
+/// [onLoadMore] as soon as it is built while [canLoadMore] is true.
+/// Used as the last item of lazy lists (ListView.builder / slivers),
+/// the footer is only built when the user scrolls near the bottom,
+/// so building it IS the scroll signal — no button, no controller.
+/// When the list is too short to scroll, the footer builds
+/// immediately and pages keep loading until the viewport fills or
+/// the list ends. Callers must make [canLoadMore] false while a
+/// load is in flight and make their load stop on an empty page,
+/// or the footer would re-trigger forever.
+class LoadMoreFooter extends StatefulWidget {
+  const LoadMoreFooter({super.key, required this.canLoadMore, required this.onLoadMore, this.countText});
+
+  final bool Function() canLoadMore;
+  final VoidCallback onLoadMore;
+  final String? countText;
+
+  @override
+  State<LoadMoreFooter> createState() => _LoadMoreFooterState();
+}
+
+class _LoadMoreFooterState extends State<LoadMoreFooter> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoad());
+  }
+
+  @override
+  void didUpdateWidget(LoadMoreFooter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoad());
+  }
+
+  void _maybeLoad() {
+    if (!mounted) return;
+    if (widget.canLoadMore()) widget.onLoadMore();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.countText != null) ...[
+              Text(widget.countText!),
+              const SizedBox(height: 8),
+            ],
+            if (widget.canLoadMore())
+              const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              const Text('已全部加载'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Poster card for grids. [isDoulist] subjects render a list badge
 /// instead of a rating, because Rexxar recommend items are mixed cards.
 class SubjectPosterCard extends StatelessWidget {
