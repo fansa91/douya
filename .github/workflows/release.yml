@@ -182,6 +182,10 @@ jobs:
             rm -rf /tmp/ipapack && mkdir -p /tmp/ipapack/Payload
             cp -R "$APP_PATH" /tmp/ipapack/Payload/
             cd /tmp/ipapack && zip -qry "$OLDPWD/dist/Douya-${TAG}-unsigned.ipa" Payload
+            # cd back: the final ls below must run in the repo, not /tmp/ipapack
+            # (without this, ls fails under bash -e and kills the whole step
+            # even though the zip already succeeded — v0.1 run 41147706475).
+            cd "$OLDPWD"
           fi
           ls -lh dist/
 
