@@ -26,6 +26,12 @@ name: Release
 #   的第一次真实验证，跑通前不要把平台工程说成已编译验证通过。
 #   android/app/build.gradle.kts 按 key.properties 读签名（weiyue 同款写法，
 #   本地无 key.properties 时回退 debug 签名；CI 在构建前先校验 Secrets，缺了直接失败）。
+#
+# Apple runner（2026-10-31 从 macos-15 改为 macos-26）：
+#   video_player_avfoundation 2.12.3 用了 Swift 6.2 的 isolation: / #isolation，
+#   macos-15 默认 Xcode 16.4（Swift 5）编不过，v0.1 首跑 iOS/macOS 就卡在这里；
+#   macos-26 默认 Xcode 26（Swift 6.2）才能编。不要把 Apple job 改回 macos-15，
+#   除非同时把 avfoundation 钉到 2.12.0 及以下。
 
 on:
   push:
@@ -126,9 +132,12 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned, no codesign)
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version && swift --version
 
       - name: Check iOS project exists
         run: |
@@ -183,9 +192,12 @@ jobs:
 
   macos:
     name: macOS DMG (unsigned)
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version && swift --version
 
       - name: Check macOS project exists
         run: |
