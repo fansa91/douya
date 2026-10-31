@@ -272,6 +272,35 @@ Future<PhotoListResult> fetchSubjectPhotos(String type, String id, {int start = 
 }
 
 @override
+Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) async {
+  // Offline samples mirroring the real feed shape: a topic post
+  // and a review post. Paging ends after this one page.
+  if (start > 0) return const FeedResult();
+  return const FeedResult(
+    items: [
+      FeedItem(
+        id: '503570060',
+        type: 'topic',
+        typeCn: '动态',
+        abstract: '假数据示例话题：周末重看了一遍老电影，还是开头那段最耐看。',
+        authorName: '样例用户',
+        commentsCount: 61,
+        reactionsCount: 323,
+        resharesCount: 2,
+      ),
+      FeedItem(
+        id: '17839104',
+        type: 'review',
+        typeCn: '影评',
+        abstract: '标题这句话我放这了，过几年回头看看是不是这样。',
+        authorName: '样例用户',
+        commentsCount: 2,
+      ),
+    ],
+  );
+}
+
+@override
 Future<ReviewDetail> fetchReview(String reviewId) async {
   return const ReviewDetail(
     id: '1000369',

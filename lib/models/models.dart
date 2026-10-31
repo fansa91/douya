@@ -834,6 +834,94 @@ class PhotoListResult {
   final int total;
 }
 
+/// One home recommend-feed card. Feed items are posts (mostly
+/// topic, sometimes review), not subjects: the readable payload
+/// lives in content (abstract/title/author/photos), the author
+/// also appears as the top-level owner, and the item id is the
+/// post id (topic items: content.id == item.id == group topic id,
+/// verified 2026-10-31 from the content uri).
+class FeedItem {
+  const FeedItem({
+    required this.id,
+    required this.type,
+    this.typeCn = '',
+    this.title = '',
+    this.abstract = '',
+    this.authorName = '',
+    this.authorAvatar,
+    this.photoUrls = const [],
+    this.commentsCount = 0,
+    this.reactionsCount = 0,
+    this.resharesCount = 0,
+    this.createdTime = '',
+    this.sharingUrl = '',
+  });
+
+  final String id;
+  final String type;
+  final String typeCn;
+  final String title;
+  final String abstract;
+  final String authorName;
+  final String? authorAvatar;
+  final List<String> photoUrls;
+  final int commentsCount;
+  final int reactionsCount;
+  final int resharesCount;
+  final String createdTime;
+  final String sharingUrl;
+
+  factory FeedItem.fromJson(Map<String, dynamic> json) {
+    final content = json['content'] is Map<String, dynamic>
+        ? json['content'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final author = content['author'] is Map<String, dynamic>
+        ? content['author'] as Map<String, dynamic>
+        : (json['owner'] is Map<String, dynamic> ? json['owner'] as Map<String, dynamic> : null);
+    String? authorAvatar;
+    final avatar = author?['avatar'];
+    if (avatar is String) {
+      authorAvatar = avatar;
+    } else if (avatar is Map<String, dynamic>) {
+      authorAvatar = avatar['large'] as String? ?? avatar['normal'] as String?;
+    }
+    final photoUrls = <String>[];
+    if (content['photos'] is List) {
+      for (final p in content['photos'] as List) {
+        if (p is Map<String, dynamic>) {
+          final url = Photo.fromJson(p).url;
+          if (url != null) photoUrls.add(url);
+        }
+      }
+    }
+    return FeedItem(
+      id: '${json['id'] ?? content['id'] ?? ''}',
+      type: '${json['type'] ?? content['type'] ?? ''}',
+      typeCn: '${json['type_cn'] ?? ''}',
+      title: '${content['title'] ?? ''}',
+      abstract: '${content['abstract'] ?? ''}',
+      authorName: '${author?['name'] ?? ''}',
+      authorAvatar: authorAvatar,
+      photoUrls: photoUrls,
+      commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
+      reactionsCount: (json['reactions_count'] as num?)?.toInt() ?? 0,
+      resharesCount: (json['reshares_count'] as num?)?.toInt() ?? 0,
+      createdTime: json['created_time'] is String ? json['created_time'] as String : '',
+      sharingUrl: json['sharing_url'] is String ? json['sharing_url'] as String : '',
+    );
+  }
+}
+
+/// Paged recommend-feed result. The feed response carries no
+/// total (its count field is just the page size), so hasMore is
+/// "this page came back full" and paging stops on a short page.
+class FeedResult {
+  const FeedResult({this.items = const [], this.hasMore = false});
+
+  final List<FeedItem> items;
+  final bool hasMore;
+}
+
 /// Group topic sorts verified 2026-10-31 for group 146409:
 /// new = 最新 (total 2,443,291), hot = 热门 (total capped at 10,000).
 /// popular/default return 0 items and are NOT used.

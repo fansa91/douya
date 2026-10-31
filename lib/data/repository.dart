@@ -32,6 +32,11 @@ abstract class DoubanRepository {
   /// start=10 returns a different page). Failures surface to the
   /// UI as a SnackBar, like the paged comments.
   Future<PhotoListResult> fetchSubjectPhotos(String type, String id, {int start = 0, int count = 20});
+
+  /// Home recommend feed: Frodo /elendil/recommend_feed with
+  /// for_mobile=1 (guest-usable, verified 2026-10-31). No total:
+  /// hasMore is true only when a full page came back.
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20});
   Future<List<Subject>> fetchSuggest(String query);
   Future<List<Subject>> fetchSearch(String query);
   Future<SearchSubjectsResult> fetchSearchSubjects(String query, {String? type, int start = 0, int count = 20});

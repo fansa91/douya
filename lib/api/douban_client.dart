@@ -693,6 +693,16 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) async {
+    final data = await _client.signedGet(
+      '/api/v2/elendil/recommend_feed',
+      {'for_mobile': 1, 'start': start, 'count': count},
+    );
+    final items = _parseList(data['items'], FeedItem.fromJson);
+    return FeedResult(items: items, hasMore: items.length >= count);
+  }
+
+  @override
   Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
     final result = await fetchGroupTopicsPaged(groupId, 'new', start: 0, count: 20);
     return result.items;
