@@ -201,6 +201,30 @@ TopicComment(authorName: '路人', text: '请问还可以看房吗？', voteCoun
 }
 
 @override
+Future<CommentListResult> fetchSubjectComments(String type, String id, {int start = 0, int count = 20}) async {
+  final detail = await fetchSubject(type, id);
+  return CommentListResult(items: detail.comments, total: detail.comments.length);
+}
+
+@override
+Future<ReviewListResult> fetchSubjectReviews(String type, String id, {int start = 0, int count = 20}) async {
+  final detail = await fetchSubject(type, id);
+  return ReviewListResult(items: detail.reviews, total: detail.reviews.length);
+}
+
+@override
+Future<ReviewDetail> fetchReview(String reviewId) async {
+  return const ReviewDetail(
+    id: '1000369',
+    title: '十年·肖申克的救赎',
+    userName: '离线示例',
+    content: '长评全文示例。真实数据走 Frodo /api/v2/review/{id}，返回的 HTML 会在模型层转成纯文本。',
+    usefulCount: 1024,
+    commentsCount: 128,
+  );
+}
+
+@override
 Future<CelebrityDetail> fetchCelebrity(String id) async {
 return const CelebrityDetail(
 celebrity: Celebrity(id: '1054521', name: '蒂姆·罗宾斯', character: '饰 安迪·杜佛兰'),

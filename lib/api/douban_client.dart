@@ -307,6 +307,8 @@ class RealDoubanRepository implements DoubanRepository {
       ],
       episodesCount: (detail['episodes_count'] as num?)?.toInt() ?? 0,
       episodesInfo: detail['episodes_info'] is String ? detail['episodes_info'] as String : '',
+      commentsTotal: (interests['total'] as num?)?.toInt() ?? 0,
+      reviewsTotal: (reviews['total'] as num?)?.toInt() ?? 0,
       genres: ((detail['genres'] as List?) ?? []).map((e) => '$e').toList(),
       comments: _parseList(interests['interests'], ShortComment.fromJson),
       reviews: _parseList(reviews['reviews'], Review.fromJson),
@@ -600,6 +602,36 @@ class RealDoubanRepository implements DoubanRepository {
       content: (detail['content'] as String?) ?? '',
       comments: _parseList(comments['comments'], TopicComment.fromJson),
     );
+  }
+
+  @override
+  Future<CommentListResult> fetchSubjectComments(String type, String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet(
+      '/api/v2/$type/$id/interests',
+      {'status': 'done', 'start': start, 'count': count},
+    );
+    return CommentListResult(
+      items: _parseList(data['interests'], ShortComment.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<ReviewListResult> fetchSubjectReviews(String type, String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet(
+      '/api/v2/$type/$id/reviews',
+      {'start': start, 'count': count},
+    );
+    return ReviewListResult(
+      items: _parseList(data['reviews'], Review.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<ReviewDetail> fetchReview(String reviewId) async {
+    final data = await _client.signedGet('/api/v2/review/$reviewId');
+    return ReviewDetail.fromJson(data);
   }
 
   @override

@@ -16,6 +16,16 @@ abstract class DoubanRepository {
   /// app's own personal feed is not used here).
   Future<List<HomeSection>> fetchHomeSections();
   Future<SubjectDetail> fetchSubject(String type, String id);
+
+  /// Paged short comments (interests, status=done) and long reviews
+  /// for a subject. Totals come from the API; stop at total.
+  Future<CommentListResult> fetchSubjectComments(String type, String id, {int start = 0, int count = 20});
+  Future<ReviewListResult> fetchSubjectReviews(String type, String id, {int start = 0, int count = 20});
+
+  /// Long review full text. /api/v2/review/{id} (200, HTML content
+  /// converted to plain text by ReviewDetail.fromJson). The
+  /// /{type}/{id}/review/{id} form is 404 and must not be used.
+  Future<ReviewDetail> fetchReview(String reviewId);
   Future<List<Subject>> fetchSuggest(String query);
   Future<List<Subject>> fetchSearch(String query);
   Future<SearchSubjectsResult> fetchSearchSubjects(String query, {String? type, int start = 0, int count = 20});

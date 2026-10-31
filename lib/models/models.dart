@@ -122,6 +122,8 @@ class SubjectDetail {
     this.authors = const [],
     this.episodesCount = 0,
     this.episodesInfo = '',
+    this.commentsTotal = 0,
+    this.reviewsTotal = 0,
     this.genres = const [],
     this.comments = const [],
     this.reviews = const [],
@@ -136,6 +138,11 @@ class SubjectDetail {
   final String summary;
   final List<String> directors;
   final List<String> actors;
+
+  /// Totals for the paged comment/review tabs. fetchSubject still
+  /// loads only the first 10 of each; the tabs page from there.
+  final int commentsTotal;
+  final int reviewsTotal;
 
   /// Book author (detail['author'], a list of strings) and music
   /// singer (detail['singer'], a list of {name}) share this field;
@@ -279,6 +286,73 @@ class ShortComment {
       text: (json['comment'] as String?) ?? (json['text'] as String?) ?? '',
       rating: Rating.tryParse(json['rating']),
       voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
+      createTime: (json['create_time'] as String?) ?? '',
+    );
+  }
+}
+
+/// Paged short comments (interests) and long reviews. Totals come
+/// from the API; stop paging when items.length reaches total.
+class CommentListResult {
+  const CommentListResult({this.items = const [], this.total = 0});
+
+  final List<ShortComment> items;
+  final int total;
+}
+
+class ReviewListResult {
+  const ReviewListResult({this.items = const [], this.total = 0});
+
+  final List<Review> items;
+  final int total;
+}
+
+/// Long review full text. The API returns HTML
+/// (<div><p>…</p><strong>…</strong></p>), so fromJson converts it to
+/// plain text (paragraph breaks kept) before the UI ever sees it.
+class ReviewDetail {
+  const ReviewDetail({
+    required this.id,
+    required this.title,
+    this.userName = '',
+    this.content = '',
+    this.usefulCount = 0,
+    this.commentsCount = 0,
+    this.createTime = '',
+  });
+
+  final String id;
+  final String title;
+  final String userName;
+  final String content;
+  final int usefulCount;
+  final int commentsCount;
+  final String createTime;
+
+  factory ReviewDetail.fromJson(Map<String, dynamic> json) {
+    final user = json['user'];
+    String name = '';
+    if (user is Map) name = (user['name'] as String?) ?? '';
+    final raw = (json['content'] as String?) ?? '';
+    final plain = raw
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n\n')
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+    return ReviewDetail(
+      id: '${json['id'] ?? ''}',
+      title: (json['title'] as String?) ?? '',
+      userName: name,
+      content: plain,
+      usefulCount: (json['useful_count'] as num?)?.toInt() ?? 0,
+      commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
     );
   }

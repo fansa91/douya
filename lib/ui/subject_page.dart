@@ -146,18 +146,123 @@ Widget _header(SubjectDetail detail) {
   );
 }
 
-Widget _commentList(List<ShortComment> comments) {
-  if (comments.isEmpty) return const EmptyState(message: '暂无短评');
-  return Column(
-    children: [
-      for (final c in comments)
-        ListTile(
-          title: Text(c.userName),
-          subtitle: Text(c.text, maxLines: 3, overflow: TextOverflow.ellipsis),
-          trailing: c.rating != null ? RatingText(rating: c.rating!, community: false) : null,
+/// One short comment row. Tap toggles between the 3-line preview
+/// and the full text (the API already returns the full text; only
+/// the UI truncated it). Vote count and time come from the same
+/// item; the UI previously showed neither.
+class _CommentTile extends StatefulWidget {
+  const _CommentTile({required this.comment});
+
+  final ShortComment comment;
+
+  @override
+  State<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends State<_CommentTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.comment;
+    final meta = [
+      if (c.voteCount > 0) '赞 ${c.voteCount}',
+      if (c.createTime.isNotEmpty) c.createTime,
+    ].join(' · ');
+    return ListTile(
+      title: Text(c.userName),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(c.text, maxLines: _expanded ? null : 3, overflow: _expanded ? null : TextOverflow.ellipsis),
+          if (meta.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(meta, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ],
+      ),
+      trailing: c.rating != null ? RatingText(rating: c.rating!, community: false) : null,
+      onTap: () => setState(() => _expanded = !_expanded),
+    );
+  }
+}
+
+/// Paged short comments. Starts from the first page fetchSubject
+/// already loaded and pages by the API total, same pattern as the
+/// group topic list. Used on both mobile (inside a ListView tab)
+/// and desktop (inside the scrolling detail column), so it builds
+/// a Column, not its own scroll view.
+class _PagedComments extends StatefulWidget {
+  const _PagedComments({
+    required this.repository,
+    required this.type,
+    required this.id,
+    required this.initialItems,
+    required this.total,
+  });
+
+  final DoubanRepository repository;
+  final String type;
+  final String id;
+  final List<ShortComment> initialItems;
+  final int total;
+
+  @override
+  State<_PagedComments> createState() => _PagedCommentsState();
+}
+
+class _PagedCommentsState extends State<_PagedComments> {
+  late List<ShortComment> _items = widget.initialItems;
+  late int _total = widget.total;
+  bool _loadingMore = false;
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || (_total > 0 && _items.length >= _total)) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository.fetchSubjectComments(widget.type, widget.id, start: _items.length, count: 20);
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...result.items];
+          if (result.total > 0) _total = result.total;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const EmptyState(message: '暂无短评');
+    final hasMore = _total > 0 && _items.length < _total;
+    return Column(
+      children: [
+        for (final c in _items) _CommentTile(comment: c),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              if (_total > 0) Text('已加载 ${_items.length} / $_total'),
+              const SizedBox(height: 8),
+              if (hasMore)
+                FilledButton(
+                  onPressed: _loadingMore ? null : _loadMore,
+                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
+                )
+              else
+                const Text('已全部加载'),
+            ],
+          ),
         ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 /// Mobile celebrity tab content. Celebrities are already fetched
@@ -183,18 +288,143 @@ Widget _celebrityList(List<Celebrity> celebrities, DoubanRepository repository) 
   );
 }
 
-Widget _reviewList(List<Review> reviews) {
-  if (reviews.isEmpty) return const EmptyState(message: '暂无长评');
-  return Column(
-    children: [
-      for (final r in reviews)
-        ListTile(
-          title: Text(r.title),
-          subtitle: Text(r.abstract, maxLines: 3, overflow: TextOverflow.ellipsis),
-          trailing: Text('有用 ${r.usefulCount}'),
+/// Paged long reviews. Tap a review to open its full text page.
+/// Same Column-based paging pattern as _PagedComments.
+class _PagedReviews extends StatefulWidget {
+  const _PagedReviews({
+    required this.repository,
+    required this.type,
+    required this.id,
+    required this.initialItems,
+    required this.total,
+  });
+
+  final DoubanRepository repository;
+  final String type;
+  final String id;
+  final List<Review> initialItems;
+  final int total;
+
+  @override
+  State<_PagedReviews> createState() => _PagedReviewsState();
+}
+
+class _PagedReviewsState extends State<_PagedReviews> {
+  late List<Review> _items = widget.initialItems;
+  late int _total = widget.total;
+  bool _loadingMore = false;
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || (_total > 0 && _items.length >= _total)) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository.fetchSubjectReviews(widget.type, widget.id, start: _items.length, count: 20);
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...result.items];
+          if (result.total > 0) _total = result.total;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const EmptyState(message: '暂无长评');
+    final hasMore = _total > 0 && _items.length < _total;
+    return Column(
+      children: [
+        for (final r in _items)
+          ListTile(
+            title: Text(r.title),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(r.abstract, maxLines: 3, overflow: TextOverflow.ellipsis),
+                if (r.userName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(r.userName, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ],
+            ),
+            trailing: Text('有用 ${r.usefulCount}'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ReviewDetailPage(repository: widget.repository, reviewId: r.id)),
+              );
+            },
+          ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              if (_total > 0) Text('已加载 ${_items.length} / $_total'),
+              const SizedBox(height: 8),
+              if (hasMore)
+                FilledButton(
+                  onPressed: _loadingMore ? null : _loadMore,
+                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
+                )
+              else
+                const Text('已全部加载'),
+            ],
+          ),
         ),
-    ],
-  );
+      ],
+    );
+  }
+}
+
+/// Long review full text page. Content arrives as plain text
+/// (ReviewDetail.fromJson strips the API's HTML); photos from the
+/// review detail are not shown yet.
+class ReviewDetailPage extends StatelessWidget {
+  const ReviewDetailPage({super.key, required this.repository, required this.reviewId});
+
+  final DoubanRepository repository;
+  final String reviewId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('长评详情')),
+      body: FutureBuilder<ReviewDetail>(
+        future: repository.fetchReview(reviewId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LoadingList();
+          }
+          if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
+          final detail = snapshot.data;
+          if (detail == null) return const EmptyState(message: '暂无长评');
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(detail.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(
+                [
+                  if (detail.userName.isNotEmpty) detail.userName,
+                  if (detail.createTime.isNotEmpty) detail.createTime,
+                  '有用 ${detail.usefulCount}',
+                  '回应 ${detail.commentsCount}',
+                ].join(' · '),
+              ),
+              const Divider(height: 32),
+              SelectableText(detail.content),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _MobileDetail extends StatelessWidget {
@@ -222,8 +452,12 @@ class _MobileDetail extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                ListView(children: [_commentList(detail.comments)]),
-                ListView(children: [_reviewList(detail.reviews)]),
+                ListView(children: [
+                  _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal),
+                ]),
+                ListView(children: [
+                  _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal),
+                ]),
                 detail.photos.isEmpty
                     ? const EmptyState(message: '暂无剧照')
                     : Builder(
@@ -330,10 +564,10 @@ class _DesktopDetail extends StatelessWidget {
                 _trailerSection(context, detail.trailers),
                 const SizedBox(height: 24),
                 const Text('短评', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                _commentList(detail.comments),
+                _PagedComments(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.comments, total: detail.commentsTotal),
                 const SizedBox(height: 24),
                 const Text('长评', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                _reviewList(detail.reviews),
+                _PagedReviews(repository: repository, type: detail.subject.type, id: detail.subject.id, initialItems: detail.reviews, total: detail.reviewsTotal),
                 if (detail.photos.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   const Text('剧照', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
