@@ -246,24 +246,46 @@ class RealDoubanRepository implements DoubanRepository {
     return sections.whereType<HomeSection>().toList();
   }
 
+  /// Tolerant sub-calls for fetchSubject. The detail call itself
+  /// stays strict (a dead detail is a real error), but every other
+  /// section degrades to empty on failure: music and book have no
+  /// photos or celebrities endpoint at all (both 404 traversal_error,
+  /// probed 2026-10-31), and the old Future.wait over all 7 calls
+  /// made those two detail pages fail outright. A missing section
+  /// now shows its empty state instead of killing the whole page.
+  Future<Map<String, dynamic>> _safeGet(String path, [Map<String, dynamic>? params]) async {
+    try {
+      return await _client.signedGet(path, params);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<List<dynamic>> _safeGetList(String path) async {
+    try {
+      return await _client.signedGetList(path);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   @override
   Future<SubjectDetail> fetchSubject(String type, String id) async {
+    final detail = await _client.signedGet('/api/v2/$type/$id');
     final results = await Future.wait([
-      _client.signedGet('/api/v2/$type/$id'),
-      _client.signedGet('/api/v2/$type/$id/interests', {'status': 'done', 'start': 0, 'count': 10}),
-      _client.signedGet('/api/v2/$type/$id/reviews', {'start': 0, 'count': 10}),
-      _client.signedGet('/api/v2/$type/$id/photos', {'start': 0, 'count': 10}),
-      _client.signedGetList('/api/v2/$type/$id/recommendations'),
-      _client.signedGet('/api/v2/$type/$id/related_doulists', {'start': 0, 'count': 10}),
-      _client.signedGet('/api/v2/$type/$id/celebrities', {'start': 0, 'count': 10}),
+      _safeGet('/api/v2/$type/$id/interests', {'status': 'done', 'start': 0, 'count': 10}),
+      _safeGet('/api/v2/$type/$id/reviews', {'start': 0, 'count': 10}),
+      _safeGet('/api/v2/$type/$id/photos', {'start': 0, 'count': 10}),
+      _safeGetList('/api/v2/$type/$id/recommendations'),
+      _safeGet('/api/v2/$type/$id/related_doulists', {'start': 0, 'count': 10}),
+      _safeGet('/api/v2/$type/$id/celebrities', {'start': 0, 'count': 10}),
     ]);
-    final detail = results[0] as Map<String, dynamic>;
-    final interests = results[1] as Map<String, dynamic>;
-    final reviews = results[2] as Map<String, dynamic>;
-    final photos = results[3] as Map<String, dynamic>;
-    final recommendations = results[4] as List<dynamic>;
-    final doulists = results[5] as Map<String, dynamic>;
-    final celebrities = results[6] as Map<String, dynamic>;
+    final interests = results[0] as Map<String, dynamic>;
+    final reviews = results[1] as Map<String, dynamic>;
+    final photos = results[2] as Map<String, dynamic>;
+    final recommendations = results[3] as List<dynamic>;
+    final doulists = results[4] as Map<String, dynamic>;
+    final celebrities = results[5] as Map<String, dynamic>;
     String nameOf(dynamic person) {
       if (person is Map) return (person['name'] as String?) ?? '';
       return '$person';
@@ -276,6 +298,13 @@ class RealDoubanRepository implements DoubanRepository {
       trailers: _parseList(detail['trailers'], Trailer.fromJson),
       directors: ((detail['directors'] as List?) ?? []).map(nameOf).toList(),
       actors: ((detail['actors'] as List?) ?? []).map(nameOf).toList(),
+      // Book: detail['author'] is a list of strings. Music:
+      // detail['singer'] is a list of {name}. Movie/tv have neither,
+      // so authors stays empty there and directors/actors are used.
+      authors: [
+        ...((detail['author'] as List?) ?? []).map((e) => '$e'),
+        ...((detail['singer'] as List?) ?? []).map(nameOf),
+      ],
       genres: ((detail['genres'] as List?) ?? []).map((e) => '$e').toList(),
       comments: _parseList(interests['interests'], ShortComment.fromJson),
       reviews: _parseList(reviews['reviews'], Review.fromJson),

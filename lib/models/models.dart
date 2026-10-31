@@ -119,6 +119,7 @@ class SubjectDetail {
     this.summary = '',
     this.directors = const [],
     this.actors = const [],
+    this.authors = const [],
     this.genres = const [],
     this.comments = const [],
     this.reviews = const [],
@@ -133,6 +134,11 @@ class SubjectDetail {
   final String summary;
   final List<String> directors;
   final List<String> actors;
+
+  /// Book author (detail['author'], a list of strings) and music
+  /// singer (detail['singer'], a list of {name}) share this field;
+  /// movie/tv leave it empty and use directors/actors instead.
+  final List<String> authors;
   final List<String> genres;
   final List<ShortComment> comments;
   final List<Review> reviews;
