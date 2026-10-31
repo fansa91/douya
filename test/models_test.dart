@@ -306,6 +306,31 @@ void main() {
       expect(result.items.first.id, '1292052');
     });
 
+    test('Celebrity accepts a plain-string avatar as well as a map', () {
+      final fromMap = Celebrity.fromJson(<String, dynamic>{
+        'id': '1054521',
+        'name': '蒂姆·罗宾斯',
+        'avatar': <String, dynamic>{'large': 'https://img.example/large.jpg', 'normal': 'https://img.example/normal.jpg'},
+      });
+      expect(fromMap.avatar, 'https://img.example/large.jpg');
+      final fromString = Celebrity.fromJson(<String, dynamic>{
+        'id': '1054521',
+        'name': '蒂姆·罗宾斯',
+        'avatar': 'https://img.example/avatar.jpg',
+      });
+      expect(fromString.avatar, 'https://img.example/avatar.jpg');
+    });
+
+    test('ShortComment parses the commenter avatar', () {
+      final c = ShortComment.fromJson(<String, dynamic>{
+        'comment': '好看',
+        'vote_count': 3,
+        'user': <String, dynamic>{'name': '文泽尔', 'avatar': 'https://img.example/u.jpg'},
+      });
+      expect(c.userName, '文泽尔');
+      expect(c.userAvatar, 'https://img.example/u.jpg');
+    });
+
     test('ReviewDetail strips HTML to plain text', () {
       final review = ReviewDetail.fromJson(<String, dynamic>{
         'id': 1000369,

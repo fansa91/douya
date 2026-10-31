@@ -412,6 +412,7 @@ class ShortComment {
     this.rating,
     this.voteCount = 0,
     this.createTime = '',
+    this.userAvatar,
   });
 
   final String userName;
@@ -419,6 +420,9 @@ class ShortComment {
   final Rating? rating;
   final int voteCount;
   final String createTime;
+
+  /// Commenter's avatar (plain URL string in the interests payload).
+  final String? userAvatar;
 
   factory ShortComment.fromJson(Map<String, dynamic> json) {
     final user = json['user'];
@@ -430,6 +434,7 @@ class ShortComment {
       rating: Rating.tryParse(json['rating']),
       voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
+      userAvatar: authorAvatarOf(user),
     );
   }
 }
@@ -572,9 +577,13 @@ class Celebrity {
   final List<String> roles;
 
   factory Celebrity.fromJson(Map<String, dynamic> json) {
+    // The celebrities endpoint returns {large, normal} maps; other
+    // celebrity payloads carry a plain URL string. Both are valid.
     final avatar = json['avatar'];
     String? avatarUrl;
-    if (avatar is Map) {
+    if (avatar is String) {
+      avatarUrl = avatar;
+    } else if (avatar is Map) {
       avatarUrl = imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
     }
     return Celebrity(
