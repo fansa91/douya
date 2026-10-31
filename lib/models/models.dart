@@ -705,6 +705,7 @@ class BrowseFilter {
 }
 
 const browseCategoryLabels = <String, String>{
+  'recommend': '推荐',
   'movie': '电影',
   'tv': '剧集',
   'book': '图书',
@@ -713,6 +714,10 @@ const browseCategoryLabels = <String, String>{
 };
 
 const browseFilters = <String, List<BrowseFilter>>{
+  // The 推荐 category has no filters: it renders the recommendation
+  // sections view (BrowsePage special-cases it, never calls
+  // fetchBrowse for it), so this list is deliberately empty.
+  'recommend': [],
   'movie': [
     BrowseFilter('showing', '正在热映'),
     BrowseFilter('soon', '即将上映'),

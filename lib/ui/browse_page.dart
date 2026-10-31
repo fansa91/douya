@@ -6,6 +6,77 @@ import 'faceted_view.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
+/// The 推荐 category view: the recommendation sections that used to
+/// live on the Discover page, stacked vertically. Each section is a
+/// horizontal poster row; its 更多 button switches Browse itself to
+/// that section's category/filter (no extra page is pushed).
+class _RecommendSections extends StatelessWidget {
+  const _RecommendSections({
+    required this.repository,
+    required this.onOpenSection,
+    required this.onOpenSubject,
+  });
+
+  final DoubanRepository repository;
+  final void Function(HomeSection section) onOpenSection;
+  final void Function(Subject subject) onOpenSubject;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<HomeSection>>(
+      future: repository.fetchHomeSections(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingList();
+        }
+        if (snapshot.hasError) {
+          return EmptyState(message: '加载失败：${snapshot.error}');
+        }
+        final sections = snapshot.data ?? const [];
+        if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            for (final section in sections) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      section.title,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => onOpenSection(section),
+                    child: const Text('更多 >'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 220,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: section.items.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) => SizedBox(
+                    width: 120,
+                    child: SubjectPosterCard(
+                      subject: section.items[i],
+                      onTap: () => onOpenSubject(section.items[i]),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Browse by category + filter, paged. "正在热映" is a movie filter here,
 /// not on the home page. Switching category/filter resets the list;
 /// "加载更多" appends until items reach the API total.
@@ -21,7 +92,7 @@ class BrowsePage extends StatefulWidget {
 }
 
 class _BrowsePageState extends State<BrowsePage> {
-  static const _categories = ['movie', 'tv', 'book', 'music', 'show'];
+  static const _categories = ['recommend', 'movie', 'tv', 'book', 'music', 'show'];
 
   late String _category;
   late String _filter;
@@ -34,15 +105,32 @@ class _BrowsePageState extends State<BrowsePage> {
   @override
   void initState() {
     super.initState();
-    _category = _categories.contains(widget.initialCategory) ? widget.initialCategory! : 'movie';
+    _category = _categories.contains(widget.initialCategory) ? widget.initialCategory! : 'recommend';
+    if (_category == 'recommend') {
+      // The 推荐 category renders the sections view, which drives
+      // its own fetchHomeSections; there is no filter or list load.
+      _filter = '';
+      _loading = false;
+      return;
+    }
     final filters = browseFilters[_category]!;
     _filter = filters.any((f) => f.id == widget.initialFilter) ? widget.initialFilter! : filters.first.id;
     _load();
   }
 
   Future<void> _load() async {
-    // The 多维筛选 filter does not use fetchBrowse at all; it renders
-    // FacetedView, which drives its own searches.
+    // The 推荐 category and the 多维筛选 filter do not use
+    // fetchBrowse at all; they render their own views, which drive
+    // their own searches.
+    if (_category == 'recommend') {
+      setState(() {
+        _loading = false;
+        _error = null;
+        _items = [];
+        _total = 0;
+      });
+      return;
+    }
     if (_filter == 'filter') {
       setState(() {
         _loading = false;
@@ -98,7 +186,17 @@ class _BrowsePageState extends State<BrowsePage> {
     if (category == _category) return;
     setState(() {
       _category = category;
-      _filter = browseFilters[category]!.first.id;
+      _filter = category == 'recommend' ? '' : browseFilters[category]!.first.id;
+    });
+    _load();
+  }
+
+  /// A section's 更多 button: switch Browse itself to that section's
+  /// category/filter instead of pushing another page.
+  void _openSection(HomeSection section) {
+    setState(() {
+      _category = section.category;
+      _filter = section.filter;
     });
     _load();
   }
@@ -137,22 +235,29 @@ class _BrowsePageState extends State<BrowsePage> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Wrap(
-            spacing: 8,
-            children: [
-              for (final f in filters)
-                ChoiceChip(
-                  label: Text(f.label),
-                  selected: _filter == f.id,
-                  onSelected: (_) => _selectFilter(f.id),
-                ),
-            ],
+        if (_category != 'recommend')
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                for (final f in filters)
+                  ChoiceChip(
+                    label: Text(f.label),
+                    selected: _filter == f.id,
+                    onSelected: (_) => _selectFilter(f.id),
+                  ),
+              ],
+            ),
           ),
-        ),
         Expanded(
-          child: _filter == 'filter'
+          child: _category == 'recommend'
+              ? _RecommendSections(
+                  repository: widget.repository,
+                  onOpenSection: _openSection,
+                  onOpenSubject: _openSubject,
+                )
+              : _filter == 'filter'
               ? FacetedView(
                   key: ValueKey(_category),
                   repository: widget.repository,

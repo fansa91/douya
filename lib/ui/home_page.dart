@@ -3,13 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
-import 'browse_page.dart';
 import 'group_page.dart';
 import 'subject_page.dart';
-import 'widgets.dart';
 
-/// Discover page: the real home recommend feed on top, then the
-/// guest-assembled recommendation sections below it.
+/// Discover page: the real home recommend feed only. The
+/// guest-assembled recommendation sections that used to sit below
+/// the feed now live in Browse under the 推荐 category.
 ///
 /// The feed is Frodo /elendil/recommend_feed with for_mobile=1
 /// (without that param the guest call returns 200 but 0 items;
@@ -23,26 +22,6 @@ class HomePage extends StatelessWidget {
 
   final DoubanRepository repository;
 
-  void _openSubject(BuildContext context, Subject subject) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SubjectPage(repository: repository, type: subject.type, id: subject.id),
-      ),
-    );
-  }
-
-  void _openMore(BuildContext context, HomeSection section) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BrowsePage(
-          repository: repository,
-          initialCategory: section.category,
-          initialFilter: section.filter,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -51,66 +30,13 @@ class HomePage extends StatelessWidget {
         const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         _FeedList(repository: repository),
-        const Divider(height: 32),
-        FutureBuilder<List<HomeSection>>(
-          future: repository.fetchHomeSections(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingList();
-            }
-            if (snapshot.hasError) {
-              return EmptyState(message: '推荐分区加载失败：${snapshot.error}');
-            }
-            final sections = snapshot.data ?? const [];
-            if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
-            return Column(
-              children: [
-                for (final section in sections) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          section.title,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => _openMore(context, section),
-                        child: const Text('更多 >'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 220,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: section.items.length,
-                      separatorBuilder: (context, index) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) => SizedBox(
-                        width: 120,
-                        child: SubjectPosterCard(
-                          subject: section.items[i],
-                          onTap: () => _openSubject(context, section.items[i]),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ],
-            );
-          },
-        ),
       ],
     );
   }
 }
 
 /// Paged recommend-feed list. Builds a Column (not its own scroll
-/// view) because it lives inside the Discover ListView, above the
-/// recommendation sections. A feed failure only empties this
-/// section (with a retry button); the sections below still load.
+/// view) because it lives inside the Discover ListView.
 class _FeedList extends StatefulWidget {
   const _FeedList({required this.repository});
 
