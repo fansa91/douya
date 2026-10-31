@@ -418,69 +418,113 @@ class TopicDetailView extends StatelessWidget {
         if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
         final detail = snapshot.data;
         if (detail == null) return const EmptyState(message: '暂无话题');
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
+        // Wide detail pane (>=720, measured on the pane itself, not
+        // the window): content left, replies right, each scrolling
+        // on its own. Narrow panes — mobile, and the group tab's
+        // detail pane when the window is too small to split — keep
+        // the single top-to-bottom column.
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 720) {
+              return ListView(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
-                    if (detail.groupName.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      InkWell(
-                        onTap: detail.groupId.isEmpty
-                            ? null
-                            : () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => GroupTopicsPage(repository: repository, groupId: detail.groupId),
-                                  ),
-                                );
-                              },
-                        child: Row(
-                          children: [
-                            const Icon(Icons.group_outlined, size: 16),
-                            const SizedBox(width: 4),
-                            Expanded(child: Text(detail.groupName)),
-                            if (detail.groupId.isNotEmpty) const Icon(Icons.chevron_right, size: 16),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SelectableText(detail.content),
-            const Divider(height: 32),
-            Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-            for (final c in detail.comments)
-              Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: ListTile(
-                  title: Text(c.authorName),
-                  subtitle: SelectableText(c.text),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                children: [
+                  _headerCard(context, detail),
+                  const SizedBox(height: 16),
+                  SelectableText(detail.content),
+                  const Divider(height: 32),
+                  Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
+                  for (final c in detail.comments) _commentCard(c),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      const Icon(Icons.thumb_up_outlined, size: 16),
-                      const SizedBox(width: 4),
-                      Text('${c.voteCount}'),
+                      _headerCard(context, detail),
+                      const SizedBox(height: 16),
+                      SelectableText(detail.content),
                     ],
                   ),
                 ),
-              ),
-          ],
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
+                      for (final c in detail.comments) _commentCard(c),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _headerCard(BuildContext context, TopicDetail detail) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
+            if (detail.groupName.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: detail.groupId.isEmpty
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => GroupTopicsPage(repository: repository, groupId: detail.groupId),
+                          ),
+                        );
+                      },
+                child: Row(
+                  children: [
+                    const Icon(Icons.group_outlined, size: 16),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(detail.groupName)),
+                    if (detail.groupId.isNotEmpty) const Icon(Icons.chevron_right, size: 16),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _commentCard(TopicComment c) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: ListTile(
+        title: Text(c.authorName),
+        subtitle: SelectableText(c.text),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.thumb_up_outlined, size: 16),
+            const SizedBox(width: 4),
+            Text('${c.voteCount}'),
+          ],
+        ),
+      ),
     );
   }
 }
