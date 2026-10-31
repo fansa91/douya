@@ -77,6 +77,16 @@
 - **评分规则**：社区评分 0–10、个人评分 1–5 分开显示，不混算、不二次除 2。
 - **分页规则**：接口层以返回的 `total` 为准，代码里仓库接口都带 `start` / `count`。
 
+## v0.2.1（已发布，2026-10-31，prerelease）
+
+v0.2 真机反馈的三批修复（https://github.com/fansa91/douya/releases/tag/v0.2.1，6 个产物：3 个 APK + 未签名 IPA + 未签名 macOS DMG + Windows ZIP；设置页 About 应显示 v0.2.1）：
+
+- **真机三问题**：照片接口和动态后几页返回的 `image.large/normal` 是尺寸对象 `{url, width, height, size}` 而不是 URL 字符串，`Photo.fromJson` 直接 `as String?` 导致发现页和条目详情页整页报错，改为 `imageUrlOf` 容错解析（头像、影人、搜索、条目封面都走它）；豆瓣图床对无 Referer / Dart 默认 UA 的请求返回 418/403，全部图片加载改带 Referer `https://m.douban.com/` + 浏览器 UA（头像、海报、剧照、预告封面、预览图），之前只剩单字占位/空白圆圈的问题随此修复；多维筛选的排序和各维度从横向 ChoiceChip 改成下拉选择（仅看可播放仍是开关，形式维度仍排除）。
+- **话题详情正文去 HTML 标签**：话题详情正文是 HTML（`<div id='content'><p ...>`，带图的有图片容器），之前原样显示会露出字面标签，现走和长评共用的 `htmlToPlainText` 过滤后再显示；正文里的配图随标签一并去掉（正文配图单独展示仍是待做的事）。
+- **数字榜详情 404 兜底**：榜单索引本身正常，但榜单索引里的数字 id 榜（如 1818）调条目接口在 Rexxar 和 Frodo 签名下都是 404（chart/board 等候选路由也全 404，只有 slug 榜能走条目接口），原来点榜单必定“榜单加载失败”且重试无用；现在榜单详情拿不到完整列表时展示榜单索引自带的 3 条预览，并明示完整榜单暂无法通过访客接口获取。
+- **搜索条目为空修复**：`/search/subjects` 现在返回顶层 `items/total/types`，没有 `subjects` 键（带不带类型筛选都一样），而代码只读旧的 `subjects` 映射，所以搜索条目永远为空；改为双结构兼容（旧结构仍支持），类型筛选后响应 `types` 为空时保留上一次的类型 chips。
+- **全部加载更多改下滑自动加载**：新增 `LoadMoreFooter`（页脚滑进视野即自动翻页，短列表建成就连续翻页到铺满或到底），替换发现、书影音、小组话题、多维筛选、榜单详情、条目短评/长评/剧照的全部加载更多按钮；各分页加载加空页即到底的保护，防止自动加载空转。搜索条目页本来已是下滑自动加载，随搜索修复一并恢复。话题详情头像不显示经核实是图床请求头问题（见第一条），解析本身没问题。
+
 ## v0.2（已发布，2026-10-31，prerelease）
 
 以下改动已随 v0.2 发布（https://github.com/fansa91/douya/releases/tag/v0.2，6 个产物：3 个 APK + 未签名 IPA + 未签名 macOS DMG + Windows ZIP；v0.2 首跑因 Windows 任务在 windows-latest 新版 MSVC 上编译 permission_handler_windows 失败，改固定 windows-2022 后重跑成功）：
