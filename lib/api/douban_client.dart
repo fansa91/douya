@@ -114,6 +114,138 @@ class RealDoubanRepository implements DoubanRepository {
   @override
   Future<List<Subject>> fetchTrending() => fetchHot();
 
+  // --- Browse / home (v0.2) -------------------------------------------------
+  // Frodo collections are signed; Rexxar collections / recent / recommend
+  // are unsigned. Both collection shapes carry subject_collection_items
+  // + total; recent/recommend carry items + total.
+  Future<BrowseResult> _frodoCollection(String name, int start, int count) async {
+    final data = await _client.signedGet(
+      '/api/v2/subject_collection/$name/items',
+      {'start': start, 'count': count},
+    );
+    return BrowseResult(
+      items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _rexxar(String path, Map<String, dynamic> params) async {
+    final dio = Dio();
+    final response = await dio.get(
+      'https://m.douban.com/rexxar/api/v2/$path',
+      queryParameters: params,
+      options: Options(headers: {'Referer': 'https://movie.douban.com/'}),
+    );
+    final data = response.data;
+    return data is Map<String, dynamic> ? data : null;
+  }
+
+  Future<BrowseResult> _rexxarCollection(String name, int start, int count) async {
+    final data = await _rexxar(
+      'subject_collection/$name/items',
+      {'start': start, 'count': count, 'items_only': 1, 'for_mobile': 1},
+    );
+    if (data == null) return const BrowseResult();
+    return BrowseResult(
+      items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Future<BrowseResult> _rexxarRecent(String type, int start, int count) async {
+    final data = await _rexxar(
+      'subject/recent_hot/$type',
+      {'start': start, 'limit': count},
+    );
+    if (data == null) return const BrowseResult();
+    return BrowseResult(
+      items: _parseList(data['items'], (j) => Subject.fromJson(j, fallbackType: type)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  // Recommend endpoints mix subject items with chart/readlist cards;
+  // only flat subject items (movie/tv/book/music with an id) are kept.
+  Future<BrowseResult> _rexxarRecommend(String type, int start, int count) async {
+    final data = await _rexxar('$type/recommend', {'start': start, 'count': count});
+    if (data == null) return const BrowseResult();
+    final raw = data['items'];
+    if (raw is! List) return const BrowseResult();
+    final items = raw
+        .whereType<Map<String, dynamic>>()
+        .where((j) {
+          final t = j['type'] as String?;
+          final layout = j['layout'] as String?;
+          return (t == 'movie' || t == 'tv' || t == 'book' || t == 'music') &&
+              layout != 'chart' &&
+              layout != 'readlist' &&
+              '${j['id'] ?? ''}'.isNotEmpty;
+        })
+        .map((j) => Subject.fromJson(j, fallbackType: type))
+        .toList();
+    return BrowseResult(items: items, total: (data['total'] as num?)?.toInt() ?? items.length);
+  }
+
+  @override
+  Future<BrowseResult> fetchBrowse(String category, String filter, {int start = 0, int count = 20}) async {
+    switch ('$category/$filter') {
+      case 'movie/showing':
+        return _frodoCollection('movie_showing', start, count);
+      case 'movie/soon':
+        return _frodoCollection('movie_soon', start, count);
+      case 'movie/recent':
+        return _rexxarRecent('movie', start, count);
+      case 'movie/top250':
+        return _rexxarCollection('movie_top250', start, count);
+      case 'movie/recommend':
+        return _rexxarRecommend('movie', start, count);
+      case 'tv/recent':
+        return _rexxarRecent('tv', start, count);
+      case 'tv/hot':
+        return _rexxarCollection('tv_hot', start, count);
+      case 'tv/recommend':
+        return _rexxarRecommend('tv', start, count);
+      case 'book/hot':
+        return _frodoCollection('book_hot', start, count);
+      case 'book/bestseller':
+        return _rexxarCollection('book_bestseller', start, count);
+      case 'book/top250':
+        return _rexxarCollection('book_top250', start, count);
+      case 'music/hot':
+        return _frodoCollection('music_hot', start, count);
+      default:
+        return const BrowseResult();
+    }
+  }
+
+  @override
+  Future<List<HomeSection>> fetchHomeSections() async {
+    // The app's own home feed is NOT guest-usable: Frodo
+    // /elendil/recommend_feed returns 200 with 0 items and toast 暂无更新
+    // for a guest signature, and /elendil/home_timeline needs login
+    // (403 code 103). So the guest home is assembled from the verified
+    // guest-usable recommendation sources below; one failing source
+    // only drops its own section, never the whole home page.
+    Future<HomeSection?> section(String title, String category, String filter, int count) async {
+      try {
+        final result = await fetchBrowse(category, filter, start: 0, count: count);
+        if (result.items.isEmpty) return null;
+        return HomeSection(title: title, items: result.items, category: category, filter: filter);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final sections = await Future.wait([
+      section('电影推荐', 'movie', 'recommend', 10),
+      section('近期热门电影', 'movie', 'recent', 10),
+      section('热门剧集', 'tv', 'recent', 10),
+      section('热门图书', 'book', 'hot', 10),
+      section('热门音乐', 'music', 'hot', 10),
+    ]);
+    return sections.whereType<HomeSection>().toList();
+  }
+
   @override
   Future<SubjectDetail> fetchSubject(String type, String id) async {
     final results = await Future.wait([
@@ -379,11 +511,20 @@ class RealDoubanRepository implements DoubanRepository {
 
   @override
   Future<List<GroupTopic>> fetchGroupTopics(String groupId) async {
+    final result = await fetchGroupTopicsPaged(groupId, 'new', start: 0, count: 20);
+    return result.items;
+  }
+
+  @override
+  Future<TopicListResult> fetchGroupTopicsPaged(String groupId, String sort, {int start = 0, int count = 20}) async {
     final data = await _client.signedGet(
       '/api/v2/group/$groupId/topics',
-      {'sortby': 'new', 'start': 0, 'count': 20},
+      {'sortby': sort, 'start': start, 'count': count},
     );
-    return _parseList(data['topics'], GroupTopic.fromJson);
+    return TopicListResult(
+      items: _parseList(data['topics'], GroupTopic.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
   }
 
   @override

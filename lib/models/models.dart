@@ -59,7 +59,11 @@ class Subject {
     } else if (rawPic is String) {
       pic = rawPic;
     }
-    pic ??= json['cover_url'] as String? ?? json['cover'] as String?;
+    final rawCover = json['cover'];
+    if (pic == null && rawCover is Map) {
+      pic = rawCover['large'] as String? ?? rawCover['normal'] as String?;
+    }
+    pic ??= json['cover_url'] as String? ?? (rawCover is String ? rawCover : null);
     final images = json['images'];
     if (pic == null && images is Map) {
       pic = images['large'] as String?;
@@ -468,6 +472,81 @@ class TopicComment {
     );
   }
 }
+
+/// Browse (书影音) filter definitions. Every (category, filter) pair below
+/// was probed 2026-10-31 and is guest-usable; see DOUBAN_GUEST_API.md §10.
+/// Categories: movie 电影, tv 剧集, book 图书, music 音乐.
+class BrowseFilter {
+  const BrowseFilter(this.id, this.label);
+
+  final String id;
+  final String label;
+}
+
+const browseCategoryLabels = <String, String>{
+  'movie': '电影',
+  'tv': '剧集',
+  'book': '图书',
+  'music': '音乐',
+};
+
+const browseFilters = <String, List<BrowseFilter>>{
+  'movie': [
+    BrowseFilter('showing', '正在热映'),
+    BrowseFilter('soon', '即将上映'),
+    BrowseFilter('recent', '近期热门'),
+    BrowseFilter('top250', 'Top250'),
+    BrowseFilter('recommend', '推荐'),
+  ],
+  'tv': [
+    BrowseFilter('recent', '近期热门'),
+    BrowseFilter('hot', '热门剧集'),
+    BrowseFilter('recommend', '推荐'),
+  ],
+  'book': [
+    BrowseFilter('hot', '热门图书'),
+    BrowseFilter('bestseller', '畅销榜'),
+    BrowseFilter('top250', 'Top250'),
+  ],
+  'music': [
+    BrowseFilter('hot', '热门音乐'),
+  ],
+};
+
+class BrowseResult {
+  const BrowseResult({this.items = const [], this.total = 0});
+
+  final List<Subject> items;
+  final int total;
+}
+
+/// One home (发现) recommendation section. `category` + `filter` are the
+/// BrowsePage selection that its "更多" button opens.
+class HomeSection {
+  const HomeSection({
+    required this.title,
+    required this.items,
+    required this.category,
+    required this.filter,
+  });
+
+  final String title;
+  final List<Subject> items;
+  final String category;
+  final String filter;
+}
+
+class TopicListResult {
+  const TopicListResult({this.items = const [], this.total = 0});
+
+  final List<GroupTopic> items;
+  final int total;
+}
+
+/// Group topic sorts verified 2026-10-31 for group 146409:
+/// new = 最新 (total 2,443,291), hot = 热门 (total capped at 10,000).
+/// popular/default return 0 items and are NOT used.
+const groupTopicSorts = <String, String>{'new': '最新', 'hot': '热门'};
 
 class TopicDetail {
   const TopicDetail({

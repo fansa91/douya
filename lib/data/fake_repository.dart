@@ -34,6 +34,18 @@ Future<List<Subject>> fetchRecentHot() async => const [_shawshank];
 Future<List<Subject>> fetchTrending() async => const [_shawshank, _honglou];
 
 @override
+Future<BrowseResult> fetchBrowse(String category, String filter, {int start = 0, int count = 20}) async {
+  final items = category == 'book' ? const [_honglou] : const [_shawshank];
+  return BrowseResult(items: items, total: items.length);
+}
+
+@override
+Future<List<HomeSection>> fetchHomeSections() async => const [
+      HomeSection(title: '电影推荐', items: [_shawshank], category: 'movie', filter: 'recommend'),
+      HomeSection(title: '热门图书', items: [_honglou], category: 'book', filter: 'hot'),
+    ];
+
+@override
 Future<SubjectDetail> fetchSubject(String type, String id) async {
 return const SubjectDetail(
 subject: _shawshank,
@@ -163,6 +175,12 @@ return const [
 GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 3),
 GroupTopic(id: '504121040', title: '个人转租，9号线漕河泾地铁口600米', authorName: '转租人', commentsCount: 0),
 ];
+}
+
+@override
+Future<TopicListResult> fetchGroupTopicsPaged(String groupId, String sort, {int start = 0, int count = 20}) async {
+  final topics = await fetchGroupTopics(groupId);
+  return TopicListResult(items: topics, total: topics.length);
 }
 
 @override

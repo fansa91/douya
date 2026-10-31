@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
+import 'browse_page.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
-/// Discover page. Mobile: horizontal poster rows + vertical feed.
-/// Desktop: poster grid + right trending column on very wide windows.
+/// Discover page: guest-usable recommendation sections, like the mobile
+/// homepage's recommendation area. "正在热映" lives in BrowsePage now,
+/// not here. Each section's "更多" opens BrowsePage at that filter.
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.repository});
 
@@ -20,10 +22,22 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  void _openMore(BuildContext context, HomeSection section) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BrowsePage(
+          repository: repository,
+          initialCategory: section.category,
+          initialFilter: section.filter,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Subject>>(
-      future: repository.fetchHot(),
+    return FutureBuilder<List<HomeSection>>(
+      future: repository.fetchHomeSections(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingList();
@@ -31,85 +45,45 @@ class HomePage extends StatelessWidget {
         if (snapshot.hasError) {
           return EmptyState(message: '加载失败：${snapshot.error}');
         }
-        final subjects = snapshot.data ?? const [];
-        if (subjects.isEmpty) return const EmptyState(message: '暂无内容');
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth >= 1024;
-            if (!isDesktop) {
-              return ListView(
-                padding: const EdgeInsets.all(16),
+        final sections = snapshot.data ?? const [];
+        if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            for (final section in sections) ...[
+              Row(
                 children: [
-                  const Text('正在热映', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 220,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: subjects.length,
-                      separatorBuilder: (context, index) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) => SizedBox(
-                        width: 120,
-                        child: SubjectPosterCard(
-                          subject: subjects[i],
-                          onTap: () => _openSubject(context, subjects[i]),
-                        ),
-                      ),
+                  Expanded(
+                    child: Text(
+                      section.title,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  const Text('推荐', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  for (final s in subjects)
-                    SubjectRow(subject: s, onTap: () => _openSubject(context, s)),
+                  TextButton(
+                    onPressed: () => _openMore(context, section),
+                    child: const Text('更多 >'),
+                  ),
                 ],
-              );
-            }
-            final columns = constraints.maxWidth >= 1440 ? 5 : 4;
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: GridView.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 0.68,
-                      ),
-                      itemCount: subjects.length,
-                      itemBuilder: (_, i) => SubjectPosterCard(
-                        subject: subjects[i],
-                        onTap: () => _openSubject(context, subjects[i]),
-                      ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 220,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: section.items.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) => SizedBox(
+                    width: 120,
+                    child: SubjectPosterCard(
+                      subject: section.items[i],
+                      onTap: () => _openSubject(context, section.items[i]),
                     ),
                   ),
                 ),
-                if (constraints.maxWidth >= 1440)
-                  SizedBox(
-                    width: 320,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('口碑榜', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 12),
-                          for (var i = 0; i < subjects.length; i++)
-                            ListTile(
-                              leading: Text('${i + 1}', style: const TextStyle(color: Color(0xFF00B51D), fontWeight: FontWeight.bold)),
-                              title: Text(subjects[i].title),
-                              onTap: () => _openSubject(context, subjects[i]),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+              ),
+              const SizedBox(height: 24),
+            ],
+          ],
         );
       },
     );

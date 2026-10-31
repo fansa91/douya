@@ -4,9 +4,11 @@ import '../data/repository.dart';
 import '../models/models.dart';
 import 'widgets.dart';
 
-/// Group browsing. Desktop uses master-detail: topic list on the left,
-/// topic detail on the right. Mobile pushes a detail page.
-/// Note: there is deliberately no "my groups" list here, because
+/// Group browsing, modeled on c001apk's topic page patterns: a sort
+/// menu (最新 / 热门), card-style topic rows, and a detail view with
+/// selectable body text and card-style replies (read-only: no reply,
+/// like or follow actions in guest mode).
+/// There is deliberately no "my groups" list here, because
 /// group/user/{id}/joined_groups returns 403 for guest signatures.
 class GroupPage extends StatefulWidget {
   const GroupPage({super.key, required this.repository, this.initialGroupId});
@@ -20,7 +22,21 @@ class GroupPage extends StatefulWidget {
 
 class _GroupPageState extends State<GroupPage> {
   late final _groupController = TextEditingController(text: widget.initialGroupId ?? '146409');
+  String _sort = 'new';
+  String _groupId = '';
+  List<GroupTopic> _topics = [];
+  int _total = 0;
+  bool _loading = true;
+  bool _loadingMore = false;
+  String? _error;
   String? _selectedTopicId;
+
+  @override
+  void initState() {
+    super.initState();
+    _groupId = _groupController.text.trim();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -28,26 +44,127 @@ class _GroupPageState extends State<GroupPage> {
     super.dispose();
   }
 
-  Widget _topicList(List<GroupTopic> topics, {required bool isDesktop}) {
-    return ListView.builder(
-      itemCount: topics.length,
-      itemBuilder: (_, i) {
-        final topic = topics[i];
-        return ListTile(
-          selected: isDesktop && _selectedTopicId == topic.id,
-          title: Text(topic.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text('${topic.authorName} · 回应 ${topic.commentsCount}'),
-          onTap: () {
-            if (isDesktop) {
-              setState(() => _selectedTopicId = topic.id);
-            } else {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => TopicDetailPage(repository: widget.repository, topicId: topic.id)),
-              );
-            }
-          },
-        );
-      },
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _topics = [];
+      _total = 0;
+      _selectedTopicId = null;
+    });
+    try {
+      final result = await widget.repository.fetchGroupTopicsPaged(_groupId, _sort, start: 0, count: 20);
+      if (mounted) {
+        setState(() {
+          _topics = result.items;
+          _total = result.total;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || _topics.length >= _total) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository.fetchGroupTopicsPaged(_groupId, _sort, start: _topics.length, count: 20);
+      if (mounted) {
+        setState(() {
+          _topics = [..._topics, ...result.items];
+          if (result.total > 0) _total = result.total;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _openTopic(GroupTopic topic, {required bool isDesktop}) {
+    if (isDesktop) {
+      setState(() => _selectedTopicId = topic.id);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => TopicDetailPage(repository: widget.repository, topicId: topic.id)),
+      );
+    }
+  }
+
+  Widget _topicCard(GroupTopic topic, {required bool isDesktop}) {
+    final meta = [
+      if (topic.authorName.isNotEmpty) topic.authorName,
+      if (topic.createTime.isNotEmpty) topic.createTime,
+      '回应 ${topic.commentsCount}',
+    ].join(' · ');
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: isDesktop && _selectedTopicId == topic.id ? Theme.of(context).colorScheme.primaryContainer : null,
+      child: InkWell(
+        onTap: () => _openTopic(topic, isDesktop: isDesktop),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(topic.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(meta, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              if (topic.coverUrl != null && topic.coverUrl!.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(topic.coverUrl!, width: 72, height: 72, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox(width: 72, height: 72)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _topicList({required bool isDesktop}) {
+    final hasMore = _total > 0 && _topics.length < _total;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            itemCount: _topics.length,
+            itemBuilder: (_, i) => _topicCard(_topics[i], isDesktop: isDesktop),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              if (_total > 0) Text('已加载 ${_topics.length} / $_total'),
+              const SizedBox(height: 8),
+              if (hasMore)
+                FilledButton(
+                  onPressed: _loadingMore ? null : _loadMore,
+                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
+                )
+              else
+                const Text('已全部加载'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -56,7 +173,7 @@ class _GroupPageState extends State<GroupPage> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
           child: Row(
             children: [
               Expanded(
@@ -66,41 +183,65 @@ class _GroupPageState extends State<GroupPage> {
                     hintText: '输入小组 id，例如 146409',
                     border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(999))),
                   ),
-                  onSubmitted: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    _groupId = _groupController.text.trim();
+                    _load();
+                  },
                 ),
               ),
               const SizedBox(width: 8),
-              FilledButton(onPressed: () => setState(() {}), child: const Text('查看')),
+              FilledButton(
+                onPressed: () {
+                  _groupId = _groupController.text.trim();
+                  _load();
+                },
+                child: const Text('查看'),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Row(
+            children: [
+              for (final entry in groupTopicSorts.entries)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(entry.value),
+                    selected: _sort == entry.key,
+                    onSelected: (_) {
+                      if (_sort == entry.key) return;
+                      setState(() => _sort = entry.key);
+                      _load();
+                    },
+                  ),
+                ),
             ],
           ),
         ),
         Expanded(
-          child: FutureBuilder<List<GroupTopic>>(
-            future: widget.repository.fetchGroupTopics(_groupController.text.trim()),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const LoadingList();
-              }
-              if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
-              final topics = snapshot.data ?? const [];
-              if (topics.isEmpty) return const EmptyState(message: '该小组暂无话题');
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 1024) {
-                    return _topicList(topics, isDesktop: false);
-                  }
-                  final selected = _selectedTopicId ?? topics.first.id;
-                  return Row(
-                    children: [
-                      SizedBox(width: 420, child: _topicList(topics, isDesktop: true)),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: TopicDetailView(repository: widget.repository, topicId: selected)),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
+          child: _loading
+              ? const LoadingList()
+              : _error != null
+                  ? EmptyState(message: '加载失败：$_error')
+                  : _topics.isEmpty
+                      ? const EmptyState(message: '该小组暂无话题')
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (constraints.maxWidth < 1024) {
+                              return _topicList(isDesktop: false);
+                            }
+                            final selected = _selectedTopicId ?? _topics.first.id;
+                            return Row(
+                              children: [
+                                SizedBox(width: 420, child: _topicList(isDesktop: true)),
+                                const VerticalDivider(width: 1),
+                                Expanded(child: TopicDetailView(repository: widget.repository, topicId: selected)),
+                              ],
+                            );
+                          },
+                        ),
         ),
       ],
     );
@@ -142,20 +283,40 @@ class TopicDetailView extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('${detail.topic.authorName} · ${detail.topic.createTime}'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('${detail.topic.authorName} · ${detail.topic.createTime} · 回应 ${detail.topic.commentsCount}'),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
-            Text(detail.content),
+            SelectableText(detail.content),
             const Divider(height: 32),
-            const Text('回复', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
             for (final c in detail.comments)
-              ListTile(
-                title: Text(c.authorName),
-                subtitle: Text(c.text),
-                trailing: Text('赞 ${c.voteCount}'),
+              Card(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                child: ListTile(
+                  title: Text(c.authorName),
+                  subtitle: SelectableText(c.text),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.thumb_up_outlined, size: 16),
+                      const SizedBox(width: 4),
+                      Text('${c.voteCount}'),
+                    ],
+                  ),
+                ),
               ),
           ],
         );

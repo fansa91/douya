@@ -17,6 +17,13 @@ dependencies:
   cached_network_image: ^3.4.0
   # Video preview for Frodo trailers (mp4).
   video_player: ^2.9.0
+  # Image preview save/share/open-in-browser (c001apk's set, same versions).
+  saver_gallery: ^3.0.5
+  share_plus: ^10.0.0
+  permission_handler: ^11.3.1
+  device_info_plus: ^10.1.1
+  url_launcher: ^6.3.0
+  path_provider: ^2.1.0
   # Settings persistence (theme mode, search history).
   shared_preferences: ^2.3.0
 

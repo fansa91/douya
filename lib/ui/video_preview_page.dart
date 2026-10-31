@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/models.dart';
@@ -11,6 +13,11 @@ import '../models/models.dart';
 /// hard-coded, because Frodo trailer URLs are time-limited.
 /// Controls auto-hide 3 seconds after the last tap, like weiyue's
 /// player auto-hide; tap anywhere to bring them back.
+/// c001apk has no dedicated video page (it only carries a videoUrl
+/// field on feed media), so douya keeps its own player and only
+/// borrows the image-preview menu idea here: copy link / open in
+/// browser from the AppBar, since trailer URLs are time-limited and
+/// the user may want to open one elsewhere before it expires.
 class VideoPreviewPage extends StatefulWidget {
   const VideoPreviewPage({super.key, required this.trailer});
 
@@ -101,12 +108,42 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> {
     final title = widget.trailer.title.isNotEmpty
         ? widget.trailer.title
         : '预告片';
+    final videoUrl = widget.trailer.videoUrl;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: Text(title),
+        actions: [
+          if (videoUrl != null && videoUrl.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.link),
+              tooltip: '复制视频链接',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: videoUrl));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('链接已复制')));
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.open_in_browser),
+              tooltip: '在浏览器中打开',
+              onPressed: () async {
+                try {
+                  if (!await launchUrl(Uri.parse(videoUrl), mode: LaunchMode.externalApplication)) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('无法打开链接，请检查浏览器设置')));
+                    }
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('无法打开链接，请检查浏览器设置')));
+                  }
+                }
+              },
+            ),
+          ],
+        ],
       ),
       body: _error != null
           ? Center(
