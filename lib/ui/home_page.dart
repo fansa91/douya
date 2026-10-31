@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/repository.dart';
@@ -25,28 +26,38 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Desktop: the feed is text posts, so it gets the reading-pane
-    // treatment (centered 720 column) rather than stretching across
-    // the window; mobile is unaffected (cap wider than viewport).
-    return CenteredWidth(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          _FeedList(repository: repository),
-        ],
-      ),
+    // Mobile (<600): single reading column, centered at 720.
+    // Desktop (>=600, the shell's rail breakpoint): waterfall
+    // (masonry) feed, c001apk's adaptive_card_list pattern — column
+    // count from a fixed card width, shortest-column placement.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          return CenteredWidth(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                _FeedList(repository: repository),
+              ],
+            ),
+          );
+        }
+        return _FeedList(repository: repository, masonry: true);
+      },
     );
   }
 }
 
-/// Paged recommend-feed list. Builds a Column (not its own scroll
-/// view) because it lives inside the Discover ListView.
+/// Paged recommend-feed list. Mobile builds a Column (not its own
+/// scroll view) because it lives inside the Discover ListView;
+/// desktop builds its own CustomScrollView with a masonry sliver.
 class _FeedList extends StatefulWidget {
-  const _FeedList({required this.repository});
+  const _FeedList({required this.repository, this.masonry = false});
 
   final DoubanRepository repository;
+  final bool masonry;
 
   @override
   State<_FeedList> createState() => _FeedListState();
@@ -123,51 +134,113 @@ class _FeedListState extends State<_FeedList> {
     }
   }
 
+  Widget _footer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: _hasMore
+          ? FilledButton(
+              onPressed: _loadingMore ? null : _loadMore,
+              child: Text(_loadingMore ? '加载中…' : '加载更多'),
+            )
+          : const Text('已全部加载'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Padding(
+      const spinner = Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(child: CircularProgressIndicator()),
       );
+      if (!widget.masonry) return spinner;
+      return const CustomScrollView(
+        slivers: [SliverToBoxAdapter(child: spinner)],
+      );
     }
     if (_error != null && _items.isEmpty) {
-      return Column(
+      final errorView = Column(
         children: [
           Text('推荐动态加载失败：$_error'),
           const SizedBox(height: 8),
           FilledButton(onPressed: _loadInitial, child: const Text('重试')),
         ],
       );
+      if (!widget.masonry) return errorView;
+      return CustomScrollView(
+        slivers: [SliverToBoxAdapter(child: errorView)],
+      );
     }
-    if (_items.isEmpty) return const Text('暂无推荐动态');
-    return Column(
-      children: [
-        for (final item in _items) _FeedCard(item: item, onTap: () => _openItem(item)),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: _hasMore
-              ? FilledButton(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  child: Text(_loadingMore ? '加载中…' : '加载更多'),
-                )
-              : const Text('已全部加载'),
-        ),
-      ],
+    if (_items.isEmpty) {
+      const empty = Text('暂无推荐动态');
+      if (!widget.masonry) return empty;
+      return const CustomScrollView(
+        slivers: [SliverToBoxAdapter(child: empty)],
+      );
+    }
+    if (!widget.masonry) {
+      return Column(
+        children: [
+          for (final item in _items) _FeedCard(item: item, onTap: () => _openItem(item)),
+          _footer(),
+        ],
+      );
+    }
+    // Desktop masonry: column count from c001apk's formula
+    // (card width ~360 + 12 spacing, 1-4 columns). The LayoutBuilder
+    // width here is already minus the navigation rail.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = ((constraints.maxWidth - 32 + 12) / 372).floor().clamp(1, 4);
+        return CustomScrollView(
+          slivers: [
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverMasonryGrid.count(
+                crossAxisCount: columns,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childCount: _items.length,
+                itemBuilder: (context, i) => _FeedCard(
+                  item: _items[i],
+                  onTap: () => _openItem(_items[i]),
+                  margin: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Center(child: _footer()),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _FeedCard extends StatelessWidget {
-  const _FeedCard({required this.item, required this.onTap});
+  const _FeedCard({required this.item, required this.onTap, this.margin = const EdgeInsets.only(bottom: 12)});
 
   final FeedItem item;
   final VoidCallback onTap;
 
+  /// Mobile list spacing; masonry passes zero because the grid's
+  /// mainAxisSpacing already separates rows.
+  final EdgeInsetsGeometry margin;
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: margin,
       child: InkWell(
         onTap: onTap,
         child: Padding(
