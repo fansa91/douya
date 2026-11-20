@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:douya/data/fake_repository.dart';
 import 'package:douya/main.dart';
 import 'package:douya/models/models.dart';
@@ -580,6 +581,65 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     expect(await leadingAt(const Size(800, 360)), isA<Text>());
     expect(await leadingAt(const Size(1440, 900)), isA<Padding>());
+  });
+
+  // Task 9 (new plan): posters decode at display size, not full
+  // original size. At dpr 2 a 120-wide poster card decodes at 240
+  // and a 56-wide row cover at 112.
+  testWidgets('poster card decodes at display width', (tester) async {
+    const subject = Subject(
+      id: '1292052',
+      type: 'movie',
+      title: '肖申克的救赎',
+      pic: 'https://img3.doubanio.com/view/photo/m_ratio_poster/public/p2930565623.jpg',
+    );
+    tester.view.physicalSize = const Size(400, 400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 120,
+            height: 220,
+            child: SubjectPosterCard(subject: subject),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final image = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
+    expect(image.memCacheWidth, 240);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('subject row cover decodes at 56 wide', (tester) async {
+    const subject = Subject(
+      id: '1292052',
+      type: 'movie',
+      title: '肖申克的救赎',
+      pic: 'https://img3.doubanio.com/view/photo/m_ratio_poster/public/p2930565623.jpg',
+    );
+    tester.view.physicalSize = const Size(400, 400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SubjectRow(subject: subject),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final image = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
+    expect(image.memCacheWidth, 112);
+    expect(tester.takeException(), isNull);
   });
 }
 

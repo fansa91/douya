@@ -233,14 +233,26 @@ class _SubjectPosterCardState extends State<SubjectPosterCard> {
                       ? Center(child: Text(subject.title.isEmpty ? '?' : subject.title[0]))
                       : ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: pic,
-                            httpHeaders: doubanImageHeaders,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            errorWidget: (context, url, error) => Center(
-                              child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
-                            ),
+                          // Decode at display size: without
+                          // memCacheWidth the grid decoded every
+                          // poster at its full original size.
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final dpr =
+                                  MediaQuery.devicePixelRatioOf(context);
+                              return CachedNetworkImage(
+                                imageUrl: pic,
+                                httpHeaders: doubanImageHeaders,
+                                memCacheWidth: constraints.maxWidth.isFinite
+                                    ? (constraints.maxWidth * dpr).round()
+                                    : null,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                errorWidget: (context, url, error) => Center(
+                                  child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
+                                ),
+                              );
+                            },
                           ),
                         ),
                 ),
@@ -294,9 +306,12 @@ class SubjectRow extends StatelessWidget {
             ? const Icon(Icons.book_outlined)
             : ClipRRect(
                 borderRadius: BorderRadius.circular(6),
+                // The cover is a fixed 56 wide; decode at that size.
                 child: CachedNetworkImage(
                   imageUrl: pic,
                   httpHeaders: doubanImageHeaders,
+                  memCacheWidth:
+                      (56 * MediaQuery.devicePixelRatioOf(context)).round(),
                   fit: BoxFit.cover,
                   errorWidget: (context, url, error) => const Icon(Icons.book_outlined),
                 ),
