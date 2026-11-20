@@ -559,6 +559,28 @@ void main() {
     expect(measure(), const (true, 420.0));
     expect(tester.takeException(), isNull);
   });
+
+  // Task 8 (new plan): at short heights the rail's leading loses
+  // its vertical padding (labelType none was already done).
+  testWidgets('short rail drops the leading padding', (tester) async {
+    Future<Widget?> leadingAt(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: AdaptiveScaffold(repository: _repository),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      return tester.widget<NavigationRail>(find.byType(NavigationRail)).leading;
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    expect(await leadingAt(const Size(800, 360)), isA<Text>());
+    expect(await leadingAt(const Size(1440, 900)), isA<Padding>());
+  });
 }
 
 /// Counts how often the two refetch-prone calls run, so the task-1

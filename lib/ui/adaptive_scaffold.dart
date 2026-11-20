@@ -153,6 +153,8 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
         // destinations plus the leading title overflow the rail by
         // ~28px, so show icons only. Found by the layout tests
         // (task 7); this is task 6's rail-height step, done early.
+        // The leading's own vertical padding is also dropped at
+        // short heights (new plan, task 8) to give the icons room.
         final shortHeight = constraints.maxHeight < 480;
         return Scaffold(
           body: Row(
@@ -162,10 +164,12 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
                 selectedIndex: _index,
                 onDestinationSelected: _selectDestination,
                 labelType: extended || shortHeight ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-                leading: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('douya', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
+                leading: shortHeight
+                    ? const Text('douya', style: TextStyle(fontWeight: FontWeight.bold))
+                    : const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Text('douya', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                 destinations: [
                   for (var i = 0; i < _labels.length; i++)
                     NavigationRailDestination(icon: Icon(_icons[i]), label: Text(_labels[i])),
