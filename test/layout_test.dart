@@ -458,6 +458,63 @@ void main() {
     expect(after.dx, lessThan(before.dx - 200));
     expect(tester.takeException(), isNull);
   });
+
+  // Task 5 (new plan): desktop detail at 900/1024/1440/1920. The
+  // right column is 28% of the page width clamped to 340–440,
+  // measured through the TabBar that sits inside it; the mobile
+  // layout's TabBar spans the full width instead.
+  testWidgets('subject desktop right column follows the 28% rule',
+      (tester) async {
+    Future<double> tabBarWidth(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SubjectPage(
+            repository: _repository,
+            type: 'movie',
+            id: '1292052',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      return tester.getSize(find.byType(TabBar).first).width;
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    expect(await tabBarWidth(const Size(900, 800)), closeTo(340, 1));
+    expect(await tabBarWidth(const Size(1024, 800)), closeTo(340, 1));
+    expect(await tabBarWidth(const Size(1440, 900)), closeTo(403, 1));
+    expect(await tabBarWidth(const Size(1920, 1080)), closeTo(440, 1));
+  });
+
+  testWidgets('no hard-coded grey placeholder in dark mode',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: const SubjectPage(
+          repository: _repository,
+          type: 'movie',
+          id: '1292052',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final grey = tester.widgetList<Container>(find.byType(Container)).where(
+          (c) =>
+              c.decoration is BoxDecoration &&
+              (c.decoration as BoxDecoration).color == Colors.grey.shade300,
+        );
+    expect(grey, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Counts how often the two refetch-prone calls run, so the task-1

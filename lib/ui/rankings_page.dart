@@ -222,11 +222,11 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                   // and say so, instead of a retry that cannot work.
                   ? ListView(
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.all(16),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
                           child: Text(
                             '完整榜单暂无法通过访客接口获取，以下是榜单提供的预览内容。',
-                            style: TextStyle(color: Colors.grey),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                         ),
                         for (final subject in widget.board.previewSubjects)

@@ -210,9 +210,9 @@ class _FacetedViewState extends State<FacetedView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (compact) _compactFilters() else _horizontalFilters(),
-                  const Text(
+                  Text(
                     '注：筛选结果可能混有电影与剧集形式，形式维度暂不支持单选。',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),

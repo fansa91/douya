@@ -135,7 +135,7 @@ class SubjectPage extends StatelessWidget {
           if (detail == null) return const EmptyState(message: '暂无详情');
           return LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < Breakpoints.extendedRail) return _MobileDetail(detail: detail, repository: repository);
+              if (constraints.maxWidth < Breakpoints.paneSplit) return _MobileDetail(detail: detail, repository: repository);
               return _DesktopDetail(detail: detail, repository: repository);
             },
           );
@@ -161,7 +161,7 @@ Widget _header(SubjectDetail detail) {
             child: Container(
               width: 110,
               height: 150,
-              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
               child: displayPic == null
                   ? const Icon(Icons.book_outlined)
                   : ClipRRect(
@@ -924,12 +924,14 @@ class _DesktopDetail extends StatelessWidget {
       length: 2,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // At large (content >= 1200) the right column is a fixed
-          // 420; below that it keeps the old 3:1 flex split. The
-          // whole row is capped at 1440 and centered, so the left
-          // column no longer stretches across ultrawide windows.
-          final wide =
-              Breakpoints.of(constraints.maxWidth) == WindowSize.large;
+          // Right column: 28% of the page width, clamped to 340–440
+          // (at 900 wide that is 340 with a 560 left column; at
+          // 1920 it is 440). The left column's content is capped at
+          // 880 and centered, so body text does not stretch across
+          // ultrawide windows. (New plan, task 5 — replaces the 3:1
+          // flex + 420-at-large + 1440 cap from the 7-task plan.)
+          final rightWidth =
+              (constraints.maxWidth * 0.28).clamp(340.0, 440.0);
           final rightColumn = Column(
             children: [
               const TabBar(tabs: [Tab(text: '相关视频'), Tab(text: '评论')]),
@@ -943,14 +945,13 @@ class _DesktopDetail extends StatelessWidget {
               ),
             ],
           );
-          return CenteredWidth(
-            maxWidth: Breakpoints.gridMaxWidth,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left 3/4: subject info, trailers, celebrities, photos.
-                Expanded(
-                  flex: 3,
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left: subject info, trailers, celebrities, photos.
+              Expanded(
+                child: CenteredWidth(
+                  maxWidth: Breakpoints.detailTextMaxWidth,
                   child: ListView(
                     padding: const EdgeInsets.only(bottom: 24),
                     children: [
@@ -974,13 +975,10 @@ class _DesktopDetail extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Right 1/4: tabbed related videos / comments.
-                if (wide)
-                  SizedBox(width: 420, child: rightColumn)
-                else
-                  Expanded(child: rightColumn),
-              ],
-            ),
+              ),
+              // Right: tabbed related videos / comments.
+              SizedBox(width: rightWidth, child: rightColumn),
+            ],
           );
         },
       ),
