@@ -175,6 +175,7 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
 
   Future<void> _toggleFullscreen() async {
     if (_isFullscreen) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
@@ -182,6 +183,9 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
         DeviceOrientation.landscapeRight,
       ]);
     } else {
+      // Immersive sticky hides the status/navigation bars; the
+      // orientation lock alone left them visible.
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
@@ -223,7 +227,9 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _hideTimer?.cancel();
-    // Always restore orientations, even if the page is left fullscreen.
+    // Always restore orientations and system UI, even if the page is
+    // left while fullscreen.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -265,10 +271,18 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
     final title = trailer.title.isNotEmpty ? trailer.title : '预告片';
     final titleWithIndex = widget.trailers.length > 1 ? '$title (${_index + 1}/${widget.trailers.length})' : title;
     final videoUrl = trailer.videoUrl;
-    return Focus(
-      autofocus: true,
-      onKeyEvent: _onKeyEvent,
-      child: Scaffold(
+    // Back (or the system gesture) exits fullscreen first and only
+    // pops the page on a second press. Esc is handled separately by
+    // the Focus below, which exits fullscreen without popping.
+    return PopScope(
+      canPop: !_isFullscreen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isFullscreen) _toggleFullscreen();
+      },
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: _onKeyEvent,
+        child: Scaffold(
         backgroundColor: Colors.black,
         appBar: _isFullscreen
             ? null
@@ -370,7 +384,10 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
                           Positioned(
                             left: 16,
                             right: 16,
-                            bottom: 24,
+                            // Above the gesture navigation bar: the
+                            // system bottom inset is 0 in immersive
+                            // fullscreen, so this is just 16 there.
+                            bottom: 16 + MediaQuery.paddingOf(context).bottom,
                             child: Row(
                               children: [
                                 IconButton(
@@ -436,6 +453,7 @@ class _VideoPreviewPageState extends State<VideoPreviewPage> with WidgetsBinding
                       ],
                     ),
                   ),
+        ),
       ),
     );
   }
