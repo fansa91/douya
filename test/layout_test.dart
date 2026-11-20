@@ -5,6 +5,8 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:douya/data/fake_repository.dart';
+import 'package:douya/data/local_lists.dart';
+import 'package:douya/data/repository.dart';
 import 'package:douya/main.dart';
 import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
@@ -17,6 +19,7 @@ import 'package:douya/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Widget smoke tests for the adaptive layouts (task 7): each of the
 /// five main pages is pumped at four window sizes and must build
@@ -150,7 +153,13 @@ Future<void> _pumpPage(WidgetTester tester, Widget page, Size size) async {
 }
 
 void main() {
-  setUpAll(() => HttpOverrides.global = _MockHttpOverrides());
+  setUpAll(() {
+    HttpOverrides.global = _MockHttpOverrides();
+    // The user page binds ids and records recent users through
+    // LocalLists (SharedPreferences); the mock keeps those calls
+    // off the real platform channel.
+    SharedPreferences.setMockInitialValues({});
+  });
   tearDownAll(() => HttpOverrides.global = null);
 
   for (final (name, size) in _sizes) {
@@ -702,7 +711,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        home: _scaffolded(const UserPage(repository: _repository)),
+        home: _scaffolded(
+          const UserPage(repository: _repository, initialUserId: '2870956'),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -713,7 +724,11 @@ void main() {
     expect(find.text('在读'), findsOneWidget);
     expect(find.text('读过'), findsOneWidget);
     expect(find.text('book'), findsNothing);
-    expect(find.text('关注 80 · 粉丝 120'), findsOneWidget);
+    // Step 3: the header shows 粉丝 first; the interest row shows
+    // the user's own comment and date.
+    expect(find.text('粉丝 120 · 关注 80'), findsOneWidget);
+    expect(find.text('读过，很好。'), findsOneWidget);
+    expect(find.text('2026-03-21'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -726,7 +741,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        home: _scaffolded(const UserPage(repository: _repository)),
+        home: _scaffolded(
+          const UserPage(repository: _repository, initialUserId: '2870956'),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -745,12 +762,87 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        home: _scaffolded(UserPage(repository: _AvatarRepository())),
+        home: _scaffolded(
+          UserPage(repository: _AvatarRepository(), initialUserId: '2870956'),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
     expect(avatar.backgroundImage, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: with no bound id and no initialUserId, the user page
+  // shows the bind guide instead of someone else's interests.
+  testWidgets('user page shows the bind guide when unbound',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(const UserPage(repository: _repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('我的公开收藏'), findsOneWidget);
+    expect(find.text('绑定并查看'), findsOneWidget);
+    // No interests are loaded (earlier tests may have left a
+    // 'River' row in 最近查看 — that is the guide's own section).
+    expect(find.text('红楼梦'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: binding an id from the guide loads that user's profile
+  // and interests, and stores the binding in LocalLists.
+  testWidgets('user page binds an id from the guide', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(() => LocalLists.instance.setMyUserId(null));
+    addTearDown(() => LocalLists.instance.clearRecentUsers());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(const UserPage(repository: _repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '2870956');
+    await tester.tap(find.text('绑定并查看'));
+    await tester.pumpAndSettle();
+    expect(find.text('River'), findsOneWidget);
+    expect(find.text('红楼梦'), findsOneWidget);
+    expect(LocalLists.instance.myUserId, '2870956');
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: switching back to a visited (type, status) tab reuses
+  // the cache instead of fetching again.
+  testWidgets('user page caches interests per type and status',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = _CountingRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(
+          UserPage(repository: repository, initialUserId: '2870956'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.interestsCalls, 1);
+    await tester.tap(find.text('电影'));
+    await tester.pumpAndSettle();
+    expect(repository.interestsCalls, 2);
+    await tester.tap(find.text('图书'));
+    await tester.pumpAndSettle();
+    expect(repository.interestsCalls, 2);
     expect(tester.takeException(), isNull);
   });
 }
@@ -762,6 +854,7 @@ class _CountingRepository extends FakeDoubanRepository {
   int homeSectionsCalls = 0;
   int topicCalls = 0;
   int hotGroupsCalls = 0;
+  int interestsCalls = 0;
 
   @override
   Future<List<HomeSection>> fetchHomeSections() {
@@ -779,6 +872,18 @@ class _CountingRepository extends FakeDoubanRepository {
   Future<List<SearchGroup>> fetchHotGroups() {
     hotGroupsCalls++;
     return super.fetchHotGroups();
+  }
+
+  @override
+  Future<InterestListResult> fetchInterests(
+    String userId,
+    String type,
+    String status, {
+    int start = 0,
+    int count = 50,
+  }) {
+    interestsCalls++;
+    return super.fetchInterests(userId, type, status, start: start, count: count);
   }
 }
 

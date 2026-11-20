@@ -577,12 +577,25 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
-  Future<List<Interest>> fetchInterests(String userId, String type, String status) async {
+  Future<InterestListResult> fetchInterests(
+    String userId,
+    String type,
+    String status, {
+    int start = 0,
+    int count = 50,
+  }) async {
     final data = await _client.signedGet(
       '/api/v2/user/$userId/interests',
-      {'type': type, 'status': status, 'start': 0, 'count': 50},
+      {'type': type, 'status': status, 'start': start, 'count': count},
     );
-    return _parseList(data['interests'], Interest.fromJson);
+    final items = _parseList(data['interests'], Interest.fromJson);
+    // The response carries a `total` (verified 2026-10-30: user
+    // 2870956 book-done total 1). If it is ever absent, fall back to
+    // the page size so the list stops instead of paging forever.
+    return InterestListResult(
+      items: items,
+      total: (data['total'] as num?)?.toInt() ?? items.length,
+    );
   }
 
   @override

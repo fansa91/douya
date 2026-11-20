@@ -157,16 +157,26 @@ bookCollectedCount: 1,
 }
 
 @override
-Future<List<Interest>> fetchInterests(String userId, String type, String status) async {
-return const [
-Interest(
-subject: _honglou,
-status: 'done',
-rating: Rating(value: 5, max: 5),
-comment: '读过，很好。',
-createTime: '2026-03-21',
-),
-];
+Future<InterestListResult> fetchInterests(
+  String userId,
+  String type,
+  String status, {
+  int start = 0,
+  int count = 50,
+}) async {
+  const all = [
+    Interest(
+      subject: _honglou,
+      status: 'done',
+      rating: Rating(value: 5, max: 5),
+      comment: '读过，很好。',
+      createTime: '2026-03-21',
+    ),
+  ];
+  return InterestListResult(
+    items: all.skip(start).take(count).toList(),
+    total: all.length,
+  );
 }
 
 @override

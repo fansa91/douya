@@ -1,5 +1,16 @@
 import '../models/models.dart';
 
+/// One page of a user's public interests: the items plus the API's
+/// `total`. It lives here rather than in models.dart because the
+/// other result classes predate the rule that models.dart is
+/// off-limits for this round of work; the shape is identical.
+class InterestListResult {
+  const InterestListResult({required this.items, required this.total});
+
+  final List<Interest> items;
+  final int total;
+}
+
 /// The only data surface the UI depends on. Swap the implementation
 /// in main.dart to switch between fake UI data and the live Frodo client.
 abstract class DoubanRepository {
@@ -46,7 +57,17 @@ abstract class DoubanRepository {
   Future<SearchGroupResult> fetchSearchGroups(String query, {int start = 0, int count = 20});
   Future<List<SearchUser>> fetchSearchUsers(String query, {int start = 0, int count = 20});
   Future<UserProfile> fetchUser(String id);
-  Future<List<Interest>> fetchInterests(String userId, String type, String status);
+
+  /// One page of a user's public interests. The interests endpoint
+  /// returns a `total` alongside the items; the old List return type
+  /// dropped it, so pages over 50 were silently truncated.
+  Future<InterestListResult> fetchInterests(
+    String userId,
+    String type,
+    String status, {
+    int start = 0,
+    int count = 50,
+  });
   /// Hot groups: Rexxar /group/explore, top_groups module
   /// (本周热门趋势榜Top20), guest-usable without a signature
   /// (verified 2026-10-31; cross-checked against web
