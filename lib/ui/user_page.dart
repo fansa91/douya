@@ -8,6 +8,21 @@ import 'widgets.dart';
 
 /// Guest user page: the user types a public user id (from
 /// douban.com/people/<ID>/). There is no login account here.
+
+/// Type/status labels in Chinese. The API keys are book/movie/music
+/// and done/doing/mark; the status verb follows the type (读/看/听).
+String userTypeLabel(String type) => switch (type) {
+      'book' => '图书',
+      'movie' => '电影',
+      'music' => '音乐',
+      _ => type,
+    };
+
+String userStatusLabel(String type, String status) {
+  final verb = switch (type) { 'book' => '读', 'music' => '听', _ => '看' };
+  return switch (status) { 'mark' => '想$verb', 'doing' => '在$verb', _ => '$verb过' };
+}
+
 class UserPage extends StatefulWidget {
   const UserPage({super.key, required this.repository, this.initialUserId});
 
@@ -52,6 +67,18 @@ class _UserPageState extends State<UserPage> {
     }
   }
 
+  void _openSubject(Interest interest) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SubjectPage(
+          repository: widget.repository,
+          type: interest.subject.type,
+          id: interest.subject.id,
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -83,16 +110,19 @@ class _UserPageState extends State<UserPage> {
         ),
         if (_profile != null)
           ListTile(
-            leading: CircleAvatar(child: Text(_profile!.name.isEmpty ? '?' : _profile!.name[0])),
+            leading: CircleAvatar(
+              backgroundImage: _profile!.avatar != null ? doubanImageProvider(_profile!.avatar!) : null,
+              child: _profile!.avatar == null ? Text(_profile!.name.isEmpty ? '?' : _profile!.name[0]) : null,
+            ),
             title: Text(_profile!.name),
-            subtitle: Text('关注 ${_profile!.followersCount} · 粉丝 ${_profile!.followingCount}'),
+            subtitle: Text('关注 ${_profile!.followingCount} · 粉丝 ${_profile!.followersCount}'),
           ),
         Wrap(
           spacing: 8,
           children: [
             for (final t in ['book', 'movie', 'music'])
               ChoiceChip(
-                label: Text(t),
+                label: Text(userTypeLabel(t)),
                 selected: _type == t,
                 onSelected: (_) {
                   setState(() => _type = t);
@@ -101,7 +131,7 @@ class _UserPageState extends State<UserPage> {
               ),
             for (final s in ['done', 'doing', 'mark'])
               ChoiceChip(
-                label: Text(s),
+                label: Text(userStatusLabel(_type, s)),
                 selected: _status == s,
                 onSelected: (_) {
                   setState(() => _status = s);
@@ -129,17 +159,7 @@ class _UserPageState extends State<UserPage> {
                                 trailing: interest.rating != null
                                     ? RatingText(rating: interest.rating!, community: false)
                                     : null,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => SubjectPage(
-                                        repository: widget.repository,
-                                        type: interest.subject.type,
-                                        id: interest.subject.id,
-                                      ),
-                                    ),
-                                  );
-                                },
+                                onTap: () => _openSubject(interest),
                               );
                             },
                           );
@@ -159,7 +179,10 @@ class _UserPageState extends State<UserPage> {
                               childAspectRatio: 0.68,
                             ),
                             itemCount: _interests.length,
-                            itemBuilder: (_, i) => SubjectPosterCard(subject: _interests[i].subject),
+                            itemBuilder: (_, i) => SubjectPosterCard(
+                              subject: _interests[i].subject,
+                              onTap: () => _openSubject(_interests[i]),
+                            ),
                           ),
                         );
                       },

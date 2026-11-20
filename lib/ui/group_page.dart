@@ -60,9 +60,13 @@ class _GroupPageState extends State<GroupPage> {
       _selectedGroupId = _groupId;
       _load();
       _loadGroupDetail();
-    } else {
-      _loadHotGroups();
     }
+    // Always load the hot list too: the in-page "热门小组" back
+    // button returns to it, and without this the hot view spins
+    // forever (_hotLoading starts true and nothing clears it).
+    // Step 4's embedded flag will drop this prefetch when the
+    // in-page back button goes away.
+    _loadHotGroups();
   }
 
   Future<void> _loadHotGroups() async {
@@ -482,8 +486,19 @@ class _GroupPageState extends State<GroupPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedGroupId == null) return _hotView();
-    return _topicView();
+    final body = _selectedGroupId == null ? _hotView() : _topicView();
+    // System back in the tab first returns to the hot list; only
+    // then does it leave the tab/app. A pushed page (initialGroupId
+    // set) keeps its AppBar back working: its route can always pop.
+    return PopScope(
+      canPop: _selectedGroupId == null || widget.initialGroupId != null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _selectedGroupId != null) {
+          setState(() => _selectedGroupId = null);
+        }
+      },
+      child: body,
+    );
   }
 }
 

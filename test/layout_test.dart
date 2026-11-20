@@ -12,6 +12,7 @@ import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/subject_page.dart';
+import 'package:douya/ui/user_page.dart';
 import 'package:douya/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -641,6 +642,117 @@ void main() {
     expect(image.memCacheWidth, 112);
     expect(tester.takeException(), isNull);
   });
+
+  // Step 1 (group/user redesign): returning from an embedded group
+  // page to the hot list no longer spins forever.
+  testWidgets('embedded group page returns to a loaded hot list',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(
+          const GroupPage(repository: _repository, initialGroupId: '146409'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('热门小组'));
+    await tester.pumpAndSettle();
+    expect(find.text('后会友期'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 1: system back in the group tab first returns to the hot
+  // list instead of leaving the app.
+  testWidgets('system back in the group tab returns to hot list',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AdaptiveScaffold(repository: _repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('小组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('后会友期').first);
+    await tester.pumpAndSettle();
+    // Desktop splits: the first topic opens inline in the detail pane.
+    expect(find.byType(TopicDetailView), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(TopicDetailView), findsNothing);
+    expect(find.text('后会友期'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 1: user page labels are Chinese, followers/following are
+  // the right way round (fake profile: followers 120, following 80).
+  testWidgets('user page shows Chinese labels and correct counts',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(const UserPage(repository: _repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('图书'), findsOneWidget);
+    expect(find.text('电影'), findsOneWidget);
+    expect(find.text('音乐'), findsOneWidget);
+    expect(find.text('想读'), findsOneWidget);
+    expect(find.text('在读'), findsOneWidget);
+    expect(find.text('读过'), findsOneWidget);
+    expect(find.text('book'), findsNothing);
+    expect(find.text('关注 80 · 粉丝 120'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 1: the desktop poster grid opens the subject detail now.
+  testWidgets('user page desktop grid poster opens the subject',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(const UserPage(repository: _repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SubjectPosterCard), findsWidgets);
+    await tester.tap(find.byType(SubjectPosterCard).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(SubjectPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 1: a profile avatar is used instead of the initial letter.
+  testWidgets('user page shows the profile avatar', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(UserPage(repository: _AvatarRepository())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect(avatar.backgroundImage, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Counts how often the two refetch-prone calls run, so the task-1
@@ -668,6 +780,20 @@ class _CountingRepository extends FakeDoubanRepository {
     hotGroupsCalls++;
     return super.fetchHotGroups();
   }
+}
+
+/// Step 1: the fake profile has no avatar, so the avatar branch is
+/// covered with a repository that returns one.
+class _AvatarRepository extends FakeDoubanRepository {
+  @override
+  Future<UserProfile> fetchUser(String id) async => const UserProfile(
+        id: '2870956',
+        name: 'River',
+        avatar:
+            'https://img3.doubanio.com/view/photo/m_ratio_poster/public/p2930565623.jpg',
+        followersCount: 120,
+        followingCount: 80,
+      );
 }
 
 /// Task 5: on desktop the footer auto-loads 3 pages, then pauses
