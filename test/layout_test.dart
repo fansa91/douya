@@ -201,6 +201,49 @@ void main() {
       );
     });
 
+    // Step 5: the pushed group detail (mobile slivers / desktop
+    // split with placeholder) and the restyled topic detail.
+    testWidgets('group detail renders at $name', (tester) async {
+      await _pumpPage(
+        tester,
+        _scaffolded(
+          const GroupTopicsPage(repository: _repository, groupId: '146409'),
+        ),
+        size,
+      );
+    });
+
+    testWidgets('topic detail renders at $name', (tester) async {
+      await _pumpPage(
+        tester,
+        _scaffolded(
+          const TopicDetailPage(repository: _repository, topicId: '504122375'),
+        ),
+        size,
+      );
+    });
+
+    // Step 5: the user page, bound (profile + interests) and
+    // unbound (bind guide).
+    testWidgets('user page (bound) renders at $name', (tester) async {
+      await _pumpPage(
+        tester,
+        _scaffolded(
+          const UserPage(repository: _repository, initialUserId: '2870956'),
+        ),
+        size,
+      );
+    });
+
+    testWidgets('user page (guide) renders at $name', (tester) async {
+      await LocalLists.instance.setMyUserId(null);
+      await _pumpPage(
+        tester,
+        _scaffolded(const UserPage(repository: _repository)),
+        size,
+      );
+    });
+
     testWidgets('settings renders at $name', (tester) async {
       await _pumpPage(tester, const SettingsPage(), size);
     });
