@@ -117,35 +117,33 @@ class _FacetedViewState extends State<FacetedView> {
   /// means 全部. (Previously each filter was a full-width labeled
   /// row; the rows stacked to a full screen before the results.)
   Widget _dropdownChip(String label, String? value, List<MapEntry<String?, String>> options, ValueChanged<String?> onChanged) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Container(
-        padding: const EdgeInsets.only(left: 12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outline),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 4),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String?>(
-                value: options.any((o) => o.key == value) ? value : null,
-                hint: const Text('全部'),
-                items: [
-                  for (final option in options)
-                    DropdownMenuItem<String?>(
-                      value: option.key,
-                      child: Text(option.value, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: onChanged,
-              ),
+    // No outer padding: the HScrollRow supplies the 8 gap between chips.
+    return Container(
+      padding: const EdgeInsets.only(left: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: options.any((o) => o.key == value) ? value : null,
+              hint: const Text('全部'),
+              items: [
+                for (final option in options)
+                  DropdownMenuItem<String?>(
+                    value: option.key,
+                    child: Text(option.value, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: onChanged,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -159,46 +157,43 @@ class _FacetedViewState extends State<FacetedView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
+              HScrollRow(
+                children: [
+                  _dropdownChip(
+                    '排序',
+                    _sort,
+                    [for (final sort in _sorts) MapEntry(sort.name, sort.text)],
+                    (value) {
+                      if (value == null || value == _sort) return;
+                      setState(() => _sort = value);
+                      _search(reset: true);
+                    },
+                  ),
+                  for (final group in _selectableGroups)
                     _dropdownChip(
-                      '排序',
-                      _sort,
-                      [for (final sort in _sorts) MapEntry(sort.name, sort.text)],
-                      (value) {
-                        if (value == null || value == _sort) return;
-                        setState(() => _sort = value);
-                        _search(reset: true);
-                      },
-                    ),
-                    for (final group in _selectableGroups)
-                      _dropdownChip(
-                        group.type,
-                        _selected[group.type],
-                        [
-                          const MapEntry<String?, String>(null, '全部'),
-                          for (final value in group.values)
-                            if (!value.startsWith('全部')) MapEntry<String?, String>(value, value),
-                        ],
-                        (value) => _select(group.type, value),
-                      ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('仅看可播放', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Switch(
-                          value: _playable,
-                          onChanged: (value) {
-                            setState(() => _playable = value);
-                            _search(reset: true);
-                          },
-                        ),
+                      group.type,
+                      _selected[group.type],
+                      [
+                        const MapEntry<String?, String>(null, '全部'),
+                        for (final value in group.values)
+                          if (!value.startsWith('全部')) MapEntry<String?, String>(value, value),
                       ],
+                      (value) => _select(group.type, value),
                     ),
-                  ],
-                ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('仅看可播放', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Switch(
+                        value: _playable,
+                        onChanged: (value) {
+                          setState(() => _playable = value);
+                          _search(reset: true);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const Text(
                 '注：筛选结果可能混有电影与剧集形式，形式维度暂不支持单选。',

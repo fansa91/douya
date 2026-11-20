@@ -57,15 +57,25 @@ class _RecommendSections extends StatelessWidget {
               const SizedBox(height: 12),
               SizedBox(
                 height: 220,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: section.items.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 12),
-                  itemBuilder: (_, i) => SizedBox(
-                    width: 120,
-                    child: SubjectPosterCard(
-                      subject: section.items[i],
-                      onTap: () => onOpenSubject(section.items[i]),
+                // Mouse drag for the poster row: same default-behavior
+                // gap as HScrollRow (no mouse in dragDevices), but a
+                // plain scroll view here — arrows/scrollbar would not
+                // fit the 220-high row, so drag only.
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: kHorizontalDragDevices,
+                    scrollbars: false,
+                  ),
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: section.items.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 12),
+                    itemBuilder: (_, i) => SizedBox(
+                      width: 120,
+                      child: SubjectPosterCard(
+                        subject: section.items[i],
+                        onTap: () => onOpenSubject(section.items[i]),
+                      ),
                     ),
                   ),
                 ),
@@ -231,41 +241,29 @@ class _BrowsePageState extends State<BrowsePage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final c in _categories)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(browseCategoryLabels[c]!),
-                      selected: _category == c,
-                      onSelected: (_) => _selectCategory(c),
-                    ),
-                  ),
-              ],
-            ),
+          child: HScrollRow(
+            children: [
+              for (final c in _categories)
+                ChoiceChip(
+                  label: Text(browseCategoryLabels[c]!),
+                  selected: _category == c,
+                  onSelected: (_) => _selectCategory(c),
+                ),
+            ],
           ),
         ),
         if (_category != 'recommend')
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final f in filters)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(f.label),
-                        selected: _filter == f.id,
-                        onSelected: (_) => _selectFilter(f.id),
-                      ),
-                    ),
-                ],
-              ),
+            child: HScrollRow(
+              children: [
+                for (final f in filters)
+                  ChoiceChip(
+                    label: Text(f.label),
+                    selected: _filter == f.id,
+                    onSelected: (_) => _selectFilter(f.id),
+                  ),
+              ],
             ),
           ),
         Expanded(

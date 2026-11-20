@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -253,6 +255,142 @@ class CenteredWidth extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
+    );
+  }
+}
+
+/// Drag devices for horizontal rows: the framework default (touch,
+/// stylus, trackpad, unknown) plus mouse. The default
+/// ScrollBehavior.dragDevices has no mouse (verified in the Flutter
+/// 3.47 SDK source), so a plain SingleChildScrollView cannot be
+/// dragged with a mouse on desktop at all.
+const kHorizontalDragDevices = <PointerDeviceKind>{
+  PointerDeviceKind.touch,
+  PointerDeviceKind.mouse,
+  PointerDeviceKind.trackpad,
+  PointerDeviceKind.stylus,
+  PointerDeviceKind.invertedStylus,
+  PointerDeviceKind.unknown,
+};
+
+/// Single-line horizontal row with desktop affordances: mouse drag,
+/// a scrollbar, and left/right arrow buttons that appear only when
+/// the row can scroll that way. Mobile (<600 content width) keeps
+/// touch scrolling only — no arrows, no scrollbar.
+///
+/// The mouse wheel is deliberately NOT converted to horizontal
+/// scrolling here: a plain wheel scrolls the page vertically, and
+/// Shift+wheel already scrolls horizontal rows (the framework flips
+/// axes while Shift is held), so converting it would scroll both the
+/// row and the page at once. The 600 threshold matches the shell's
+/// mobile/desktop split; task 1 will centralize it in Breakpoints.
+class HScrollRow extends StatefulWidget {
+  const HScrollRow({super.key, required this.children, this.spacing = 8});
+
+  final List<Widget> children;
+  final double spacing;
+
+  @override
+  State<HScrollRow> createState() => _HScrollRowState();
+}
+
+class _HScrollRowState extends State<HScrollRow> {
+  final _controller = ScrollController();
+  bool _canLeft = false;
+  bool _canRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_updateArrows);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrows());
+  }
+
+  @override
+  void didUpdateWidget(HScrollRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrows());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _updateArrows() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final canLeft = position.pixels > 0;
+    final canRight = position.pixels < position.maxScrollExtent;
+    if (canLeft != _canLeft || canRight != _canRight) {
+      setState(() {
+        _canLeft = canLeft;
+        _canRight = canRight;
+      });
+    }
+  }
+
+  void _scrollBy(double delta) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final target = (_controller.offset + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    _controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Widget _arrow(bool left) {
+    return IconButton(
+      icon: Icon(left ? Icons.chevron_left : Icons.chevron_right),
+      tooltip: left ? '向左滚动' : '向右滚动',
+      onPressed: () => _scrollBy(left ? -300 : 300),
+      style: IconButton.styleFrom(
+        minimumSize: const Size(32, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 600;
+        final row = ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: kHorizontalDragDevices,
+            scrollbars: false,
+          ),
+          child: Scrollbar(
+            controller: _controller,
+            thumbVisibility: isDesktop,
+            child: SingleChildScrollView(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < widget.children.length; i++) ...[
+                    if (i > 0) SizedBox(width: widget.spacing),
+                    widget.children[i],
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+        if (!isDesktop) return row;
+        return Row(
+          children: [
+            if (_canLeft) _arrow(true),
+            Expanded(child: row),
+            if (_canRight) _arrow(false),
+          ],
+        );
+      },
     );
   }
 }
