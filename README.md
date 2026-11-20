@@ -13,7 +13,7 @@
 - `pubspec.yaml` 当前版本：`0.1.0+1`，对应首个发布版本 **v0.1**。
 - 版本规则（和 weiyue 同款做法）：`pubspec` 里只留 `0.1.0+1` 不动，
   发布版本以 Git tag 为准，打 `v0.1` tag 即发布 v0.1，打 `v0.2` 即 v0.2。
-- 当前状态：v0.3 已发布（2026-10-31，prerelease）；v0.3 之后的一批桌面端/手机端改进已合入 main，尚未打 tag 发布（见下）。
+- 当前状态：v0.3 已发布（2026-10-31，prerelease）；v0.3 之后的两批改进已合入 main，尚未打 tag 发布（见下）。
 
 ## LOGO 与 M3 风格
 
@@ -95,6 +95,20 @@
   代码里 `SubjectPosterCard` 已处理豆列 badge）。
 - **评分规则**：社区评分 0–10、个人评分 1–5 分开显示，不混算、不二次除 2。
 - **分页规则**：接口层以返回的 `total` 为准，代码里仓库接口都带 `start` / `count`。
+
+## v0.3 之后第二批（已合入 main，尚未打 tag 发布）
+
+2026-11-20 的第二批改进（10 任务计划里的 7 个；任务 4 断点集中、任务 7 筛选弹层、任务 10 布局测试已在上一批做完），按“每个任务一个分支、一次提交”做完后合入 main（7 个提交），只推送、不打包，没有新 tag、没有新 Release；以下改动尚未经真机/桌面实测确认：
+
+- **任务 1 修复重复请求**：`_RecommendSections` 和 `TopicDetailView` 原来是 `StatelessWidget`，future 在 `build` 里现建，外壳的 `LayoutBuilder` 每次尺寸变化都重建页面，拖窗口、旋转、弹键盘都会重新请求并闪加载圈；现在改成 `StatefulWidget`，future 只在 `initState` 里建一次，`didUpdateWidget` 里比较 repository / topicId，变了才重请求。验收用的计数器没放 `lib/data/`（计划禁动），在测试里包了一层计数的仓库：改前拖尺寸后 `fetchHomeSections` 调了 2 次，改后 1 次；话题详情改尺寸不重请求，换 topicId 才重请求。
+- **任务 2 标签页保持状态**：外壳改成按需创建的 `IndexedStack`，每个标签页第一次访问时创建，之后一直留在树上；之前 `_pageFor(_index)` 每次都新建页面，切标签就丢滚动位置和已加载内容。宽度跨过 600 时外壳结构会变（Scaffold 和 Row 两种），子树仍会重建；想连这个也保留要给 body 包 `KeyedSubtree` + `GlobalKey`，计划里标了可选，这次没做。
+- **任务 3 全局鼠标拖动**：`main.dart` 新增 `AppScrollBehavior`——框架默认可拖动的设备里没有鼠标，所以横向行和竖向列表都不能用鼠标拖；现在在默认集合上加鼠标，其余不变，并启用。排行榜、搜索、影人行这些裸横向滚动行不用逐个改，直接生效；书影音推荐区每分区的海报行改成 `HScrollRow`，桌面端左右箭头（点一次滚 300px）+ 滚动条。普通滚轮仍是竖向滚动，`Shift+滚轮` 翻横向。
+- **任务 5 条目详情新方案**：桌面阈值从 1024 降到 900（`Breakpoints.paneSplit`；推出来的页面没有侧边栏，页面宽就是窗口宽），取代上一批的 1024 / 右栏 ≥1200 才固定 420 / 整行 1440 上限；右栏改成 `(宽 × 0.28).clamp(340, 440)`，左栏 `Expanded`，内部内容包 `CenteredWidth(maxWidth: 880)`，1920 宽时正文不再拉满。深色模式写死的浅灰：封面占位 `Colors.grey.shade300` → `surfaceContainerHighest`，多维筛选和排行榜的 `Colors.grey` 文字 → `onSurfaceVariant`。
+- **任务 6 小组页新方案**：分栏阈值 1024 → 900（和任务 5 同一个 `paneSplit` 常量），取代上一批的 840；话题列表宽度：内容 ≥1280 用 420，否则 340，取代上一批的 360/420；详情窗格自身的双栏阈值保持 720。窗口 1100（内容 860）不分栏，1440（内容 1200）分栏列表 340，1600（内容 1360）分栏列表 420。
+- **任务 8 横屏 Rail**：窗高 <480 时 leading 由带 16px 上下内边距的 `Padding` 改成裸 `Text`，给 5 个图标腾出 32px（只显示图标那一步是上一批任务 7 顺手做的）。
+- **任务 9 图片解码尺寸**：`SubjectPosterCard` 海报包一层 `LayoutBuilder`，`memCacheWidth = (格宽 × dpr).round()`（无限宽时传 null）；`SubjectRow` 封面固定 56 宽，`memCacheWidth = (56 × dpr).round()`。之前网格海报按原始尺寸解码。
+
+现在共 62 个测试，本地全过。
 
 ## v0.3 之后（已合入 main，尚未打 tag 发布）
 
