@@ -435,6 +435,41 @@ class SkeletonBar extends StatelessWidget {
   }
 }
 
+/// Skeleton for the recommend feed: three card-shaped placeholders
+/// (author row, title, image), in place of the first-load spinner.
+class FeedSkeleton extends StatelessWidget {
+  const FeedSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          for (var i = 0; i < 3; i++) ...[
+            const Row(
+              children: [
+                SkeletonBar(width: 32, height: 32),
+                SizedBox(width: 8),
+                SkeletonBar(width: 120),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const SkeletonBar(width: 220, height: 18),
+            const SizedBox(height: 8),
+            const SkeletonBar(),
+            const SizedBox(height: 8),
+            const SkeletonBar(width: 180),
+            const SizedBox(height: 12),
+            const SkeletonBar(height: 160),
+            if (i < 2) const SizedBox(height: 24),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// Skeleton for the topic detail page: title, author row, and a
 /// few body lines, in place of the first-load spinner.
 class TopicDetailSkeleton extends StatelessWidget {

@@ -304,6 +304,9 @@ void main() {
         },
       });
       expect(item.photoUrls, ['https://img.example/p1.jpg']);
+      // The card renders each photo at its own aspect ratio.
+      expect(item.photos.first.width, 800);
+      expect(item.photos.first.height, 600);
     });
 
     test('htmlToPlainText strips topic detail HTML wrappers', () {

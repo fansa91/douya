@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'breakpoints.dart';
+import '../data/local_lists.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'topic_detail_view.dart';
@@ -16,11 +19,14 @@ import 'widgets.dart';
 ///
 /// The feed is Frodo /elendil/recommend_feed with for_mobile=1
 /// (without that param the guest call returns 200 but 0 items;
-/// verified 2026-10-31). It carries no total, so paging stops on
-/// a short page. Feed cards are topic/review posts, NOT subject
-/// posters: they render as text cards, topic taps open the topic
-/// detail, review taps open the review detail, and any other type
-/// falls back to the share link in a browser.
+/// verified 2026-10-31). It carries no total, and `start` is
+/// ignored: every request returns a fresh rotated batch (verified
+/// 2026-11-21: five batches, zero id overlap), so paging repeats
+/// start=0 and drops ids already seen instead of offsetting.
+/// Feed cards are topic/review posts, NOT subject posters: they
+/// render as text cards, topic taps open the topic detail, review
+/// taps open the review detail, and any other type falls back to
+/// the share link in a browser.
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.repository, this.refreshListenable});
 
@@ -69,7 +75,22 @@ class _FeedListState extends State<_FeedList> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
-  String? _error;
+  bool _loadFailed = false;
+  bool _loadMoreFailed = false;
+
+  /// Ids seen in this session. The feed rotates, so a repeated
+  /// request can return items already on screen; they are dropped.
+  final _seenIds = <String>{};
+
+  /// Type filter: all / topic (讨论) / review (长评). It filters
+  /// only the loaded items, and fetches more when too few match.
+  String _filter = 'all';
+  int _filterAutoLoads = 0;
+
+  /// "有 N 条新内容" banner after a refresh whose list is mostly
+  /// new. 0 hides it.
+  int _newBannerCount = 0;
+
   final _scrollController = ScrollController();
 
   @override
@@ -99,19 +120,30 @@ class _FeedListState extends State<_FeedList> {
   Future<void> _refresh() async {
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
     try {
+      final oldIds = _items.map((it) => it.id).toSet();
       final result = await widget.repository.fetchRecommendFeed(start: 0, count: 20);
       if (!mounted) return;
+      final newInList = result.items.where((it) => !oldIds.contains(it.id)).toList();
       setState(() {
         _items = result.items;
-        _hasMore = result.hasMore;
-        _error = null;
+        for (final it in result.items) {
+          _seenIds.add(it.id);
+        }
+        _hasMore = result.items.isNotEmpty;
+        _loadFailed = false;
+        _loadMoreFailed = false;
+        // Most of the refreshed list is new: flag it at the top.
+        _newBannerCount = result.items.isNotEmpty && newInList.length > result.items.length / 2
+            ? newInList.length
+            : 0;
       });
     } catch (e) {
+      debugPrint('$e');
       if (!mounted) return;
       if (_items.isEmpty) {
-        setState(() => _error = '$e');
+        setState(() => _loadFailed = true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('刷新失败：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('刷新失败，请稍后重试')));
       }
     }
   }
@@ -119,18 +151,22 @@ class _FeedListState extends State<_FeedList> {
   Future<void> _loadInitial() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _loadFailed = false;
     });
     try {
       final result = await widget.repository.fetchRecommendFeed(start: 0, count: 20);
       if (mounted) {
         setState(() {
           _items = result.items;
-          _hasMore = result.hasMore;
+          for (final it in result.items) {
+            _seenIds.add(it.id);
+          }
+          _hasMore = result.items.isNotEmpty;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      debugPrint('$e');
+      if (mounted) setState(() => _loadFailed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -139,34 +175,90 @@ class _FeedListState extends State<_FeedList> {
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
+    var added = 0;
     try {
-      final result = await widget.repository.fetchRecommendFeed(start: _items.length, count: 20);
-      if (mounted) {
+      // The feed ignores `start` and rotates (verified
+      // 2026-11-21), so paging repeats start=0 and drops ids
+      // already seen. A batch that is entirely seen is retried a
+      // few times before the list is declared done.
+      for (var attempt = 0; attempt < 3 && added == 0; attempt++) {
+        final result = await widget.repository.fetchRecommendFeed(start: 0, count: 20);
+        final fresh = result.items.where((it) => !_seenIds.contains(it.id)).toList();
+        if (fresh.isEmpty) continue;
+        if (!mounted) return;
         setState(() {
-          _items = [..._items, ...result.items];
-          _hasMore = result.hasMore;
+          _items = [..._items, ...fresh];
+          for (final it in fresh) {
+            _seenIds.add(it.id);
+          }
+          _loadMoreFailed = false;
         });
+        added = fresh.length;
       }
+      if (added == 0 && mounted) setState(() => _hasMore = false);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
-      }
+      debugPrint('$e');
+      if (mounted) setState(() => _loadMoreFailed = true);
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
   }
 
+  List<FeedItem> _visibleItems() {
+    if (_filter == 'all') return _items;
+    return _items.where((it) => it.type == _filter).toList();
+  }
+
+  void _setFilter(String filter) {
+    if (_filter == filter) return;
+    setState(() {
+      _filter = filter;
+      _filterAutoLoads = 0;
+    });
+    _ensureFilterCoverage();
+  }
+
+  /// When the filter leaves too few items on screen, fetch more
+  /// pages until there are enough (or the feed runs dry).
+  Future<void> _ensureFilterCoverage() async {
+    final filter = _filter;
+    while (mounted && _filter == filter && _visibleItems().length < 5 && _hasMore && _filterAutoLoads < 3) {
+      _filterAutoLoads++;
+      await _loadMore();
+    }
+  }
+
   void _openItem(FeedItem item) {
+    // Opening a card marks it read (its title turns muted).
+    unawaited(LocalLists.instance.markFeedRead(item.id));
     if (item.type == 'topic') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => TopicDetailPage(repository: widget.repository, topicId: item.id),
+          builder: (_) => TopicDetailPage(
+            repository: widget.repository,
+            topicId: item.id,
+            // The card already knows the title, author, and cover:
+            // the detail header renders from them at once.
+            initialTopic: GroupTopic(
+              id: item.id,
+              title: item.title,
+              authorName: item.authorName,
+              authorAvatar: item.authorAvatar,
+              commentsCount: item.commentsCount,
+              createTime: item.createdTime,
+              coverUrl: item.photoUrls.isNotEmpty ? item.photoUrls.first : null,
+            ),
+          ),
         ),
       );
     } else if (item.type == 'review') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ReviewDetailPage(repository: widget.repository, reviewId: item.id),
+          builder: (_) => ReviewDetailPage(
+            repository: widget.repository,
+            reviewId: item.id,
+            initialItem: item,
+          ),
         ),
       );
     } else if (item.sharingUrl.isNotEmpty) {
@@ -178,32 +270,78 @@ class _FeedListState extends State<_FeedList> {
     return LoadMoreFooter(
       canLoadMore: () => !_loadingMore && _hasMore,
       onLoadMore: _loadMore,
+      failed: _loadMoreFailed,
+    );
+  }
+
+  /// Title, "有新内容" banner, and the 全部 / 讨论 / 长评 filter.
+  /// Shared by the mobile header item and the desktop sliver.
+  Widget _headerContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_newBannerCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: InkWell(
+              onTap: () => setState(() => _newBannerCount = 0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('有 $_newBannerCount 条新内容')),
+                    const Icon(Icons.close, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        const Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'all', label: Text('全部')),
+            ButtonSegment(value: 'topic', label: Text('讨论')),
+            ButtonSegment(value: 'review', label: Text('长评')),
+          ],
+          selected: {_filter},
+          onSelectionChanged: (s) => _setFilter(s.first),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // The read state lives in LocalLists; rebuild the list when
+    // a card is marked read (its title turns muted).
+    return ListenableBuilder(
+      listenable: LocalLists.instance,
+      builder: (context, _) => _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     if (_loading) {
-      const spinner = Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
-      );
-      if (!widget.masonry) return spinner;
+      const skeleton = FeedSkeleton();
+      // The skeleton is taller than one phone screen; it must
+      // scroll instead of overflowing the Scaffold body.
+      if (!widget.masonry) return const SingleChildScrollView(child: skeleton);
       return const CustomScrollView(
-        slivers: [SliverToBoxAdapter(child: spinner)],
+        slivers: [SliverToBoxAdapter(child: skeleton)],
       );
     }
-    if (_error != null && _items.isEmpty) {
-      final errorView = Column(
-        children: [
-          Text('推荐动态加载失败：$_error'),
-          const SizedBox(height: 8),
-          FilledButton(onPressed: _loadInitial, child: const Text('重试')),
-        ],
-      );
+    if (_loadFailed && _items.isEmpty) {
+      final errorView = RetryState(message: '推荐动态加载失败', onRetry: _loadInitial);
       if (!widget.masonry) return errorView;
       return CustomScrollView(
-        slivers: [SliverToBoxAdapter(child: errorView)],
+        slivers: [SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: errorView))],
       );
     }
     if (_items.isEmpty) {
@@ -213,6 +351,7 @@ class _FeedListState extends State<_FeedList> {
         slivers: [SliverToBoxAdapter(child: empty)],
       );
     }
+    final visible = _visibleItems();
     if (!widget.masonry) {
       return RefreshIndicator(
         onRefresh: _refresh,
@@ -220,23 +359,15 @@ class _FeedListState extends State<_FeedList> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
-          itemCount: _items.length + 2,
-        itemBuilder: (context, i) {
-          if (i == 0) {
-            return const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 12),
-              ],
-            );
-          }
-          if (i <= _items.length) {
-            final item = _items[i - 1];
-            return _FeedCard(item: item, onTap: () => _openItem(item));
-          }
-          return _footer();
-        },
+          itemCount: visible.length + 2,
+          itemBuilder: (context, i) {
+            if (i == 0) return _headerContent();
+            if (i <= visible.length) {
+              final item = visible[i - 1];
+              return _FeedCard(item: item, onTap: () => _openItem(item), flat: true);
+            }
+            return _footer();
+          },
         ),
       );
     }
@@ -252,32 +383,32 @@ class _FeedListState extends State<_FeedList> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: Text('推荐动态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverMasonryGrid.count(
-                crossAxisCount: columns,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childCount: _items.length,
-                itemBuilder: (context, i) => _FeedCard(
-                  item: _items[i],
-                  onTap: () => _openItem(_items[i]),
-                  margin: EdgeInsets.zero,
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _headerContent(),
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Center(child: _footer()),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverMasonryGrid.count(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childCount: visible.length,
+                  itemBuilder: (context, i) => _FeedCard(
+                    item: visible[i],
+                    onTap: () => _openItem(visible[i]),
+                    margin: EdgeInsets.zero,
+                  ),
+                ),
               ),
-            ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Center(child: _footer()),
+                ),
+              ),
             ],
           ),
         );
@@ -287,7 +418,7 @@ class _FeedListState extends State<_FeedList> {
 }
 
 class _FeedCard extends StatelessWidget {
-  const _FeedCard({required this.item, required this.onTap, this.margin = const EdgeInsets.only(bottom: 12)});
+  const _FeedCard({required this.item, required this.onTap, this.margin = const EdgeInsets.only(bottom: 12), this.flat = false});
 
   final FeedItem item;
   final VoidCallback onTap;
@@ -296,86 +427,164 @@ class _FeedCard extends StatelessWidget {
   /// mainAxisSpacing already separates rows.
   final EdgeInsetsGeometry margin;
 
+  /// Mobile: flat rows with a divider instead of a Card.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
     // Desktop right-click menu (copy link / open in browser). No
     // menu when no URL can be determined for this card.
     final url = feedItemWebUrl(item);
-    final card = Card(
-      margin: margin,
-      child: InkWell(
-        onTap: onTap,
-        hoverColor:
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-        mouseCursor: SystemMouseCursors.click,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (item.authorAvatar != null && item.authorAvatar!.isNotEmpty)
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: doubanImageProvider(item.authorAvatar!),
-                    )
-                  else
-                    const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.authorName.isNotEmpty ? item.authorName : '豆瓣用户',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  if (item.typeCn.isNotEmpty)
-                    Chip(label: Text(item.typeCn), visualDensity: VisualDensity.compact),
-                ],
+    final read = LocalLists.instance.isFeedRead(item.id);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (item.authorAvatar != null && item.authorAvatar!.isNotEmpty)
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: doubanImageProvider(item.authorAvatar!),
+              )
+            else
+              const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item.authorName.isNotEmpty ? item.authorName : '豆瓣用户',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              if (item.title.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-              if (item.abstract.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(item.abstract, maxLines: 5, overflow: TextOverflow.ellipsis),
-              ],
-              if (item.photoUrls.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+            ),
+            if (item.createdTime.isNotEmpty)
+              Text(item.createdTime, style: Theme.of(context).textTheme.bodySmall),
+            if (item.typeCn.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Chip(label: Text(item.typeCn), visualDensity: VisualDensity.compact),
+            ],
+          ],
+        ),
+        if (item.title.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            item.title,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: read ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+            ),
+          ),
+        ],
+        if (item.abstract.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(item.abstract, maxLines: 4, overflow: TextOverflow.ellipsis),
+        ],
+        if (item.photos.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _photoRow(item),
+        ],
+        if (_hasCounts(item)) ...[
+          const SizedBox(height: 8),
+          _countRow(context, item),
+        ],
+      ],
+    );
+    final Widget body;
+    if (flat) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [content, const Divider(height: 24)],
+        ),
+      );
+    } else {
+      body = Card(
+        margin: margin,
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+          mouseCursor: SystemMouseCursors.click,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: content,
+          ),
+        ),
+      );
+    }
+    final Widget tappable = flat ? InkWell(onTap: onTap, child: body) : body;
+    if (url == null) return tappable;
+    return GestureDetector(
+      onSecondaryTapUp: (details) => showLinkMenu(context, details.globalPosition, url),
+      child: tappable,
+    );
+  }
+
+  /// Up to three thumbnails, each at its photo's own aspect ratio
+  /// (4:3 when the payload carries no size). The row is capped so
+  /// a very tall photo does not dominate the card.
+  Widget _photoRow(FeedItem item) {
+    final photos = item.photos.take(3).toList();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 240),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < photos.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AspectRatio(
+                  aspectRatio: _photoAspect(photos[i]),
                   child: CachedNetworkImage(
-                    imageUrl: item.photoUrls.first,
+                    imageUrl: photos[i].url!,
                     httpHeaders: doubanImageHeaders,
-                    height: 160,
-                    width: double.infinity,
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
                   ),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text('评论 ${item.commentsCount}'),
-                  if (item.resharesCount > 0) Text(' · 转发 ${item.resharesCount}'),
-                  if (item.createdTime.isNotEmpty) ...[
-                    const Spacer(),
-                    Text(item.createdTime, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        ],
       ),
     );
-    if (url == null) return card;
-    return GestureDetector(
-      onSecondaryTapUp: (details) =>
-          showLinkMenu(context, details.globalPosition, url),
-      child: card,
+  }
+
+  double _photoAspect(Photo photo) {
+    if (photo.width != null && photo.height != null && photo.width! > 0 && photo.height! > 0) {
+      return photo.width! / photo.height!;
+    }
+    return 4 / 3;
+  }
+
+  bool _hasCounts(FeedItem item) =>
+      item.reactionsCount > 0 || item.commentsCount > 0 || item.resharesCount > 0;
+
+  /// 赞 / 评论 / 转发, only the non-zero ones.
+  Widget _countRow(BuildContext context, FeedItem item) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Row(
+      children: [
+        if (item.reactionsCount > 0) ...[
+          const Icon(Icons.thumb_up_outlined, size: 16),
+          const SizedBox(width: 4),
+          Text('${item.reactionsCount}', style: style),
+          const SizedBox(width: 16),
+        ],
+        if (item.commentsCount > 0) ...[
+          const Icon(Icons.comment_outlined, size: 16),
+          const SizedBox(width: 4),
+          Text('${item.commentsCount}', style: style),
+          const SizedBox(width: 16),
+        ],
+        if (item.resharesCount > 0) ...[
+          const Icon(Icons.share_outlined, size: 16),
+          const SizedBox(width: 4),
+          Text('${item.resharesCount}', style: style),
+        ],
+      ],
     );
   }
 }

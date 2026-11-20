@@ -78,15 +78,23 @@ class LocalLists extends ChangeNotifier {
   static const _favoriteTopicsKey = 'favorite_topics';
   static const _myUserIdKey = 'my_user_id';
   static const _recentUsersKey = 'recent_users';
+  static const _readFeedIdsKey = 'read_feed_ids';
 
   static const maxFavoriteGroups = 30;
   static const maxFavoriteTopics = 30;
   static const maxRecentUsers = 10;
+  static const maxReadFeedIds = 500;
 
   List<FavoriteGroup> favoriteGroups = [];
   List<FavoriteTopic> favoriteTopics = [];
   String? myUserId;
   List<RecentUser> recentUsers = [];
+
+  /// Feed items the user has opened, newest first. The card shows
+  /// a read title in a muted colour. Only ids are stored.
+  List<String> readFeedIds = [];
+
+  bool isFeedRead(String id) => readFeedIds.contains(id);
 
   bool get isBound => myUserId != null && myUserId!.isNotEmpty;
 
@@ -104,6 +112,10 @@ class LocalLists extends ChangeNotifier {
       prefs.getString(_favoriteTopicsKey),
       FavoriteTopic.fromJson,
     );
+    final readRaw = prefs.getString(_readFeedIdsKey);
+    readFeedIds = readRaw == null || readRaw.isEmpty
+        ? []
+        : (jsonDecode(readRaw) as List?)?.whereType<String>().toList() ?? [];
     myUserId = prefs.getString(_myUserIdKey);
     recentUsers = _decodeList(
       prefs.getString(_recentUsersKey),
@@ -154,6 +166,19 @@ class LocalLists extends ChangeNotifier {
       _favoriteTopicsKey,
       jsonEncode(favoriteTopics.map((t) => t.toJson()).toList()),
     );
+  }
+
+  /// Mark a feed item as read. No-op when it already is (so the
+  /// card does not rebuild on a repeat open).
+  Future<void> markFeedRead(String id) async {
+    if (id.isEmpty || isFeedRead(id)) return;
+    readFeedIds = [id, ...readFeedIds];
+    if (readFeedIds.length > maxReadFeedIds) {
+      readFeedIds = readFeedIds.sublist(0, maxReadFeedIds);
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_readFeedIdsKey, jsonEncode(readFeedIds));
   }
 
   /// Bind (or clear, with null) the "my" user id. A blank string

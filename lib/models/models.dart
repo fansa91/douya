@@ -646,7 +646,7 @@ class Review {
 }
 
 class Photo {
-  const Photo({required this.id, this.url, this.urlLarge, this.urlSmall, this.description = ''});
+  const Photo({required this.id, this.url, this.urlLarge, this.urlSmall, this.description = '', this.width, this.height});
 
   final String id;
   final String? url;
@@ -654,15 +654,29 @@ class Photo {
   final String? urlSmall;
   final String description;
 
+  /// Pixel size from the image size object ({url, width, height}),
+  /// when the payload carries one. The feed card uses it for the
+  /// natural aspect ratio; null means the size is unknown and the
+  /// card falls back to 4:3.
+  final int? width;
+  final int? height;
+
   factory Photo.fromJson(Map<String, dynamic> json) {
     final image = json['image'];
     String? url;
     String? urlLarge;
     String? urlSmall;
+    int? width;
+    int? height;
     if (image is Map) {
       urlLarge = imageUrlOf(image['large']);
       urlSmall = imageUrlOf(image['normal']);
       url = urlLarge ?? urlSmall;
+      final size = image['large'] is Map ? image['large'] : image['normal'];
+      if (size is Map) {
+        width = (size['width'] as num?)?.toInt();
+        height = (size['height'] as num?)?.toInt();
+      }
     } else if (image is String) {
       url = image;
     }
@@ -673,6 +687,8 @@ class Photo {
       urlLarge: urlLarge,
       urlSmall: urlSmall,
       description: (json['description'] as String?) ?? '',
+      width: width,
+      height: height,
     );
   }
 }
@@ -1062,7 +1078,7 @@ class FeedItem {
     this.abstract = '',
     this.authorName = '',
     this.authorAvatar,
-    this.photoUrls = const [],
+    this.photos = const [],
     this.commentsCount = 0,
     this.reactionsCount = 0,
     this.resharesCount = 0,
@@ -1077,7 +1093,15 @@ class FeedItem {
   final String abstract;
   final String authorName;
   final String? authorAvatar;
-  final List<String> photoUrls;
+
+  /// Attached pictures as Photo objects (with pixel size when the
+  /// payload carries it, for the card's natural aspect ratio).
+  final List<Photo> photos;
+
+  /// Plain URLs, for callers that only need the images (preview
+  /// page, tests). Derived from `photos`.
+  List<String> get photoUrls => photos.map((p) => p.url).whereType<String>().toList();
+
   final int commentsCount;
   final int reactionsCount;
   final int resharesCount;
@@ -1098,12 +1122,12 @@ class FeedItem {
     } else if (avatar is Map<String, dynamic>) {
       authorAvatar = imageUrlOf(avatar['large']) ?? imageUrlOf(avatar['normal']);
     }
-    final photoUrls = <String>[];
+    final photos = <Photo>[];
     if (content['photos'] is List) {
       for (final p in content['photos'] as List) {
         if (p is Map<String, dynamic>) {
-          final url = Photo.fromJson(p).url;
-          if (url != null) photoUrls.add(url);
+          final photo = Photo.fromJson(p);
+          if (photo.url != null) photos.add(photo);
         }
       }
     }
@@ -1115,7 +1139,7 @@ class FeedItem {
       abstract: '${content['abstract'] ?? ''}',
       authorName: '${author?['name'] ?? ''}',
       authorAvatar: authorAvatar,
-      photoUrls: photoUrls,
+      photos: photos,
       commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       reactionsCount: (json['reactions_count'] as num?)?.toInt() ?? 0,
       resharesCount: (json['reshares_count'] as num?)?.toInt() ?? 0,

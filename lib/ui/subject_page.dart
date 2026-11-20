@@ -699,10 +699,15 @@ class _PagedPhotosState extends State<_PagedPhotos> {
 /// (ReviewDetail.fromJson strips the API's HTML); photos from the
 /// review detail are not shown yet.
 class ReviewDetailPage extends StatelessWidget {
-  const ReviewDetailPage({super.key, required this.repository, required this.reviewId});
+  const ReviewDetailPage({super.key, required this.repository, required this.reviewId, this.initialItem});
 
   final DoubanRepository repository;
   final String reviewId;
+
+  /// The review as the caller already knows it (feed card):
+  /// title, author, time. The header renders from it while the
+  /// full text loads, instead of a bare spinner.
+  final FeedItem? initialItem;
 
   @override
   Widget build(BuildContext context) {
@@ -712,7 +717,26 @@ class ReviewDetailPage extends StatelessWidget {
         future: repository.fetchReview(reviewId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingList();
+            final initial = initialItem;
+            if (initial == null || initial.title.isEmpty) return const LoadingList();
+            final authorLine = [
+              if (initial.authorName.isNotEmpty) initial.authorName,
+              if (initial.createdTime.isNotEmpty) initial.createdTime,
+            ].join(' · ');
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(initial.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(authorLine),
+                const SizedBox(height: 20),
+                const SkeletonBar(),
+                const SizedBox(height: 8),
+                const SkeletonBar(),
+                const SizedBox(height: 8),
+                const SkeletonBar(width: 220),
+              ],
+            );
           }
           if (snapshot.hasError) return EmptyState(message: '加载失败：${snapshot.error}');
           final detail = snapshot.data;

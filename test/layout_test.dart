@@ -14,6 +14,7 @@ import 'package:douya/ui/breakpoints.dart';
 import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/group_topics_view.dart';
+import 'package:douya/ui/home_page.dart';
 import 'package:douya/ui/rankings_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/topic_detail_view.dart';
@@ -192,6 +193,75 @@ class _NoFullBoards extends FakeDoubanRepository {
       throw Exception('404');
 }
 
+/// A feed repo returning a scripted sequence of pages; each call
+/// consumes the next entry, and the last entry repeats. Models the
+/// real feed's rotation: the same ids can come back on a later call.
+class _ScriptedFeedRepo extends FakeDoubanRepository {
+  _ScriptedFeedRepo(this.pages);
+
+  final List<List<FeedItem>> pages;
+  var calls = 0;
+
+  @override
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) async {
+    final page = pages[calls < pages.length ? calls : pages.length - 1];
+    calls++;
+    return FeedResult(items: page);
+  }
+}
+
+/// A feed repo whose first page never arrives: the skeleton must
+/// show instead of a spinner or an empty page.
+class _NeverFeedRepo extends FakeDoubanRepository {
+  final _gate = Completer<FeedResult>();
+
+  @override
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) => _gate.future;
+}
+
+/// A feed repo whose second call fails and whose later calls return
+/// one fresh item: the footer retry must recover.
+class _FlakyFeedRepo extends FakeDoubanRepository {
+  var calls = 0;
+
+  @override
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) async {
+    calls++;
+    if (calls == 2) throw Exception('boom');
+    if (calls >= 3) {
+      return const FeedResult(items: [
+        FeedItem(id: 'new1', type: 'topic', title: '新来的一条', authorName: '新人'),
+      ]);
+    }
+    return const FeedResult(items: [
+      FeedItem(id: 'a', type: 'topic', title: '第一条', authorName: '甲'),
+      FeedItem(id: 'b', type: 'topic', title: '第二条', authorName: '乙'),
+    ]);
+  }
+}
+
+/// A feed repo that serves one page until the test flips
+/// [serveFresh], then serves a fresh page: the refresh banner
+/// needs a mostly-new list. (A call-count switch would be
+/// consumed by the footer's auto-load retries instead.)
+class _RefreshFeedRepo extends FakeDoubanRepository {
+  var serveFresh = false;
+
+  @override
+  Future<FeedResult> fetchRecommendFeed({int start = 0, int count = 20}) async {
+    if (serveFresh) {
+      return const FeedResult(items: [
+        FeedItem(id: 'c', type: 'topic', title: '第三条', authorName: '丙'),
+        FeedItem(id: 'd', type: 'review', title: '第四条', authorName: '丁'),
+      ]);
+    }
+    return const FeedResult(items: [
+      FeedItem(id: 'a', type: 'topic', title: '第一条', authorName: '甲'),
+      FeedItem(id: 'b', type: 'topic', title: '第二条', authorName: '乙'),
+    ]);
+  }
+}
+
 void main() {
   setUpAll(() {
     HttpOverrides.global = _MockHttpOverrides();
@@ -294,6 +364,104 @@ void main() {
       await _pumpPage(tester, const SettingsPage(), size);
     });
   }
+
+  // Step 4 (feed redo): dedupe, filter, read state, skeleton,
+  // footer retry, new-content banner. The fake feed returns the
+  // same two items on every call, which is exactly the rotation
+  // the dedupe logic must survive.
+  testWidgets('feed dedupes rotated pages and stops when nothing new arrives', (tester) async {
+    const a = FeedItem(id: 'a', type: 'topic', title: '第一条', authorName: '甲');
+    const b = FeedItem(id: 'b', type: 'topic', title: '第二条', authorName: '乙');
+    const c = FeedItem(id: 'c', type: 'topic', title: '第三条', authorName: '丙');
+    const d = FeedItem(id: 'd', type: 'review', title: '第四条', authorName: '丁');
+    final repo = _ScriptedFeedRepo([
+      [a, b],
+      [c, d],
+      [a, b],
+    ]);
+    await _pumpPage(
+      tester,
+      _scaffolded(HomePage(repository: repo)),
+      const Size(390, 3000),
+    );
+    expect(find.text('第一条'), findsOneWidget);
+    expect(find.text('第二条'), findsOneWidget);
+    expect(find.text('第三条'), findsOneWidget);
+    expect(find.text('第四条'), findsOneWidget);
+    expect(find.text('已全部加载'), findsOneWidget);
+  });
+
+  testWidgets('feed filter shows only matching types', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(const HomePage(repository: _repository)),
+      const Size(390, 800),
+    );
+    await tester.tap(find.text('讨论'));
+    await tester.pumpAndSettle();
+    expect(find.text('假数据示例话题：周末重看了一遍老电影，还是开头那段最耐看。'), findsOneWidget);
+    expect(find.text('标题这句话我放这了，过几年回头看看是不是这样。'), findsNothing);
+    await tester.tap(find.text('长评'));
+    await tester.pumpAndSettle();
+    expect(find.text('假数据示例话题：周末重看了一遍老电影，还是开头那段最耐看。'), findsNothing);
+    expect(find.text('标题这句话我放这了，过几年回头看看是不是这样。'), findsOneWidget);
+  });
+
+  testWidgets('opening a feed card marks it read', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(const HomePage(repository: _repository)),
+      const Size(390, 800),
+    );
+    await tester.tap(find.text('假数据示例话题：周末重看了一遍老电影，还是开头那段最耐看。'));
+    await tester.pumpAndSettle();
+    expect(find.text('8号线杨思民用水电 押一付一'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(LocalLists.instance.isFeedRead('503570060'), isTrue);
+  });
+
+  testWidgets('feed shows a skeleton while the first page loads', (tester) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(HomePage(repository: _NeverFeedRepo()))),
+    );
+    await tester.pump();
+    expect(find.byType(FeedSkeleton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('feed load-more failure shows a footer retry', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(HomePage(repository: _FlakyFeedRepo())),
+      const Size(390, 3000),
+    );
+    expect(find.text('加载失败，点击重试'), findsOneWidget);
+    await tester.tap(find.text('加载失败，点击重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('新来的一条'), findsOneWidget);
+    expect(find.text('加载失败，点击重试'), findsNothing);
+  });
+
+  testWidgets('feed refresh with mostly new items shows a banner', (tester) async {
+    final repo = _RefreshFeedRepo();
+    final ticks = ValueNotifier<int>(0);
+    await _pumpPage(
+      tester,
+      _scaffolded(HomePage(repository: repo, refreshListenable: ticks)),
+      const Size(390, 800),
+    );
+    repo.serveFresh = true;
+    ticks.value++;
+    await tester.pumpAndSettle();
+    expect(find.text('有 2 条新内容'), findsOneWidget);
+    expect(find.text('第三条'), findsOneWidget);
+    expect(find.text('第一条'), findsNothing);
+  });
 
   // Browse's other two layouts: poster grid (desktop) and list (phone).
   testWidgets('browse grid renders at desktop 1440x900', (tester) async {

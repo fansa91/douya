@@ -15,10 +15,15 @@ import 'video_preview_page.dart';
 import 'widgets.dart';
 
 class TopicDetailPage extends StatefulWidget {
-  const TopicDetailPage({super.key, required this.repository, required this.topicId});
+  const TopicDetailPage({super.key, required this.repository, required this.topicId, this.initialTopic});
 
   final DoubanRepository repository;
   final String topicId;
+
+  /// The topic as the caller already knows it (feed card, group
+  /// list): title, author, cover. The header renders from it
+  /// while the detail loads, instead of a bare skeleton.
+  final GroupTopic? initialTopic;
 
   @override
   State<TopicDetailPage> createState() => _TopicDetailPageState();
@@ -89,6 +94,7 @@ class _TopicDetailPageState extends State<TopicDetailPage> {
       body: TopicDetailView(
         repository: widget.repository,
         topicId: widget.topicId,
+        initialTopic: widget.initialTopic,
         onDetail: (d) => _detail.value = d,
       ),
     );
@@ -101,7 +107,7 @@ class _TopicDetailPageState extends State<TopicDetailPage> {
 /// main.dart's MediaQuery builder for a pushed page) re-fetched the
 /// topic and flashed the spinner on every window drag.
 class TopicDetailView extends StatefulWidget {
-  const TopicDetailView({super.key, required this.repository, required this.topicId, this.onDetail});
+  const TopicDetailView({super.key, required this.repository, required this.topicId, this.onDetail, this.initialTopic});
 
   final DoubanRepository repository;
   final String topicId;
@@ -109,6 +115,10 @@ class TopicDetailView extends StatefulWidget {
   /// Called once per loaded detail (not on rebuilds), so a host
   /// page can build AppBar actions (star, menu) from it.
   final ValueChanged<TopicDetail>? onDetail;
+
+  /// The topic as the caller already knows it (feed card, group
+  /// list). The header renders from it while the detail loads.
+  final GroupTopic? initialTopic;
 
   @override
   State<TopicDetailView> createState() => _TopicDetailViewState();
@@ -202,7 +212,45 @@ class _TopicDetailViewState extends State<TopicDetailView> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const TopicDetailSkeleton();
+          final initial = widget.initialTopic;
+          if (initial == null) return const TopicDetailSkeleton();
+          // The caller already knows the title and author: show
+          // the header from them at once, with skeleton bars for
+          // the body that is still loading.
+          final authorLine = [
+            if (initial.authorName.isNotEmpty) initial.authorName,
+            if (initial.createTime.isNotEmpty) initial.createTime,
+          ].join(' · ');
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(initial.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _authorAvatar(initial.authorAvatar),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(authorLine)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const SkeletonBar(),
+              const SizedBox(height: 8),
+              const SkeletonBar(),
+              const SizedBox(height: 8),
+              const SkeletonBar(width: 220),
+            ],
+          );
         }
         if (snapshot.hasError) {
           final e = snapshot.error;

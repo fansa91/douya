@@ -39,6 +39,18 @@ void main() {
     expect(lists.favoriteGroups, isEmpty);
   });
 
+  test('marking a feed item read dedups without reordering', () async {
+    await lists.markFeedRead('feed-a');
+    await lists.markFeedRead('feed-b');
+    // Already read: a second mark is a no-op, it does not move
+    // the id to the front (the order is first-read order).
+    await lists.markFeedRead('feed-a');
+    expect(lists.isFeedRead('feed-a'), isTrue);
+    expect(lists.isFeedRead('feed-b'), isTrue);
+    expect(lists.isFeedRead('feed-c'), isFalse);
+    expect(lists.readFeedIds, ['feed-b', 'feed-a']);
+  });
+
   test('toggle favorite topic adds, then removes', () async {
     await lists.toggleFavoriteTopic(id: '504122375', title: '8号线杨思民用水电 押一付一');
     expect(lists.isFavoriteTopic('504122375'), isTrue);
