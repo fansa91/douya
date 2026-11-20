@@ -164,6 +164,44 @@ void main() {
       });
       expect(comment.authorAvatar, 'https://img.example/c.jpg');
     });
+
+    test('TopicComment parses author id, ip_location, and a one-level ref_comment', () {
+      final comment = TopicComment.fromJson(<String, dynamic>{
+        'text': '好',
+        'author': <String, dynamic>{'name': '路人', 'id': 'u-1'},
+        'ip_location': '上海',
+        'vote_count': 3,
+        'create_time': '2026-11-20',
+        'ref_comment': <String, dynamic>{
+          'text': '原帖',
+          'author': <String, dynamic>{'name': '楼主', 'id': 'u-0'},
+          'ip_location': '北京',
+        },
+      });
+      expect(comment.authorId, 'u-1');
+      expect(comment.ipLocation, '上海');
+      expect(comment.refComment?.text, '原帖');
+      expect(comment.refComment?.authorId, 'u-0');
+      // One level only: a quoted comment's own ref is not parsed.
+      expect(comment.refComment?.refComment, isNull);
+    });
+
+    test('TopicComment defaults when the new fields are missing', () {
+      final comment = TopicComment.fromJson(<String, dynamic>{'text': '好'});
+      expect(comment.authorId, '');
+      expect(comment.ipLocation, isNull);
+      expect(comment.refComment, isNull);
+    });
+
+    test('GroupTopic parses the author id', () {
+      final topic = GroupTopic.fromJson(<String, dynamic>{
+        'id': '1',
+        'title': 't',
+        'author': <String, dynamic>{'name': '楼主', 'id': 'u-0'},
+      });
+      expect(topic.authorId, 'u-0');
+      expect(GroupTopic.fromJson(<String, dynamic>{'id': '1', 'title': 't'}).authorId, '');
+    });
   });
 
   group('other models', () {

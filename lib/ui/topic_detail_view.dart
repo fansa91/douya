@@ -42,12 +42,54 @@ class TopicDetailView extends StatefulWidget {
 class _TopicDetailViewState extends State<TopicDetailView> {
   late Future<TopicDetail> _future = widget.repository.fetchTopic(widget.topicId);
 
+  /// Loaded replies and the comments endpoint's total. They are
+  /// seeded from the first page when the detail future resolves
+  /// (see the identity check in build), and grow through the
+  /// footer's load-more; a topic change re-seeds them.
+  List<TopicComment> _comments = const [];
+  int _total = 0;
+  bool _loadingMore = false;
+  bool _loadMoreFailed = false;
+  String _loadedId = '';
+
   @override
   void didUpdateWidget(covariant TopicDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.topicId != widget.topicId) {
       _future = widget.repository.fetchTopic(widget.topicId);
+      _loadedId = '';
     }
+  }
+
+  Future<void> _loadMoreComments() async {
+    if (_loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await widget.repository.fetchTopicComments(widget.topicId, start: _comments.length, count: 20);
+      if (!mounted) return;
+      setState(() {
+        _comments = [..._comments, ...page.comments];
+        if (page.total > 0) _total = page.total;
+        _loadMoreFailed = false;
+      });
+    } catch (e) {
+      debugPrint('$e');
+      if (mounted) setState(() => _loadMoreFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  /// Footer for the reply list: auto-loads the next page when it
+  /// appears (LoadMoreFooter), shows the loaded/total count, and
+  /// offers a retry after a failure instead of a SnackBar.
+  Widget _commentsFooter() {
+    return LoadMoreFooter(
+      canLoadMore: () => !_loadingMore && _comments.length < _total,
+      onLoadMore: _loadMoreComments,
+      failed: _loadMoreFailed,
+      countText: _total > 0 ? '已加载 ${_comments.length} / $_total' : null,
+    );
   }
 
   @override
@@ -66,12 +108,23 @@ class _TopicDetailViewState extends State<TopicDetailView> {
         // on its own. Narrow panes — mobile, and the group tab's
         // detail pane when the window is too small to split — keep
         // the single top-to-bottom column.
+        // Seed the reply state from the first page, once per
+        // topic. Rebuilds from load-more must not re-seed (the
+        // identity check), and a topic change re-seeds via the
+        // new id (didUpdateWidget also clears _loadedId).
+        if (_loadedId != detail.topic.id) {
+          _loadedId = detail.topic.id;
+          _comments = List.of(detail.comments);
+          _total = detail.commentsTotal > 0 ? detail.commentsTotal : detail.topic.commentsCount;
+          _loadingMore = false;
+          _loadMoreFailed = false;
+        }
         // The reply header shows the loaded count against the
-        // topic's total (the first 20 only are fetched); when the
-        // total is unknown (0), it shows just the loaded count.
-        final replyTitle = detail.topic.commentsCount > 0
-            ? '回复 (已加载 ${detail.comments.length} / ${detail.topic.commentsCount})'
-            : '回复 (${detail.comments.length})';
+        // comments endpoint's total; when the total is unknown
+        // (0), it shows just the loaded count.
+        final replyTitle = _total > 0
+            ? '回复 (已加载 ${_comments.length} / $_total)'
+            : '回复 (${_comments.length})';
         return LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth < Breakpoints.textMaxWidth) {
@@ -85,8 +138,9 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                   const Divider(height: 32),
                   Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-                  for (final c in detail.comments) _commentRow(c),
+                  if (_comments.isEmpty) const EmptyState(message: '暂无回复'),
+                  for (final c in _comments) _commentRow(c),
+                  if (_comments.isNotEmpty || _total > 0) _commentsFooter(),
                 ],
               );
             }
@@ -114,8 +168,9 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                       children: [
                         Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-                        for (final c in detail.comments) _commentRow(c),
+                        if (_comments.isEmpty) const EmptyState(message: '暂无回复'),
+                        for (final c in _comments) _commentRow(c),
+                        if (_comments.isNotEmpty || _total > 0) _commentsFooter(),
                       ],
                     ),
                   ),

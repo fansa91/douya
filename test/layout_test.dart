@@ -936,12 +936,40 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('回复 (已加载 1 / 12)'), findsOneWidget);
-    expect(find.text('路人'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    // The fake topic now has 25 replies (20 on the first page).
+    expect(find.text('回复 (已加载 20 / 25)'), findsOneWidget);
+    // The meta line is one Text: author · time.
+    expect(find.text('路人1 · 2026-11-20 10:00'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
     final title = tester.widget<Text>(find.text('8号线杨思民用水电 押一付一'));
     expect(title.style?.fontSize, 20);
     expect(tester.takeException(), isNull);
+  });
+
+  // Step 2: the reply footer auto-loads the next page when it
+  // appears (the fake topic has 25 replies: 20 + 5). A tall
+  // viewport makes the footer visible without scrolling.
+  testWidgets('topic detail loads more comments', (tester) async {
+    await _pumpPage(
+      tester,
+      const TopicDetailPage(repository: _repository, topicId: '504122375'),
+      const Size(390, 3000),
+    );
+    expect(find.text('回复内容24'), findsOneWidget);
+    expect(find.text('已加载 25 / 25'), findsOneWidget);
+  });
+
+  // Step 2: the fake comments endpoint pages by start/count and
+  // reports the total.
+  test('fake fetchTopicComments pages and totals', () async {
+    final first = await _repository.fetchTopicComments('504122375', start: 0, count: 20);
+    expect(first.comments.length, 20);
+    expect(first.total, 25);
+    final second = await _repository.fetchTopicComments('504122375', start: 20, count: 20);
+    expect(second.comments.length, 5);
+    expect(second.total, 25);
+    final pastEnd = await _repository.fetchTopicComments('504122375', start: 25, count: 20);
+    expect(pastEnd.comments, isEmpty);
   });
 
   // Step 4: the group tab has 热门 | 已收藏 segments; the favorites

@@ -11,6 +11,16 @@ class InterestListResult {
   final int total;
 }
 
+/// One page of a topic's replies: the items plus the API's `total`.
+/// Same shape as InterestListResult, for the comments endpoint
+/// (verified 2026-11-21: start/count paging works, total present).
+class TopicCommentsResult {
+  const TopicCommentsResult({required this.comments, required this.total});
+
+  final List<TopicComment> comments;
+  final int total;
+}
+
 /// The only data surface the UI depends on. Swap the implementation
 /// in main.dart to switch between fake UI data and the live Frodo client.
 abstract class DoubanRepository {
@@ -117,5 +127,9 @@ abstract class DoubanRepository {
   /// 200 (verified 2026-10-31, e.g. 146409 上海租房）.
   Future<SearchGroup> fetchGroupDetail(String groupId);
   Future<TopicDetail> fetchTopic(String topicId);
+
+  /// One page of a topic's replies, by start/count. The comments
+  /// endpoint returns a `total`; stop when loaded reaches it.
+  Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, int count = 20});
   Future<CelebrityDetail> fetchCelebrity(String id);
 }

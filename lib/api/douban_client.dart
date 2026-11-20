@@ -760,13 +760,25 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet(
+      '/api/v2/group/topic/$topicId/comments',
+      {'start': start, 'count': count},
+    );
+    return TopicCommentsResult(
+      comments: _parseList(data['comments'], TopicComment.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
   Future<TopicDetail> fetchTopic(String topicId) async {
     final results = await Future.wait([
       _client.signedGet('/api/v2/group/topic/$topicId'),
-      _client.signedGet('/api/v2/group/topic/$topicId/comments', {'start': 0, 'count': 20}),
+      fetchTopicComments(topicId, start: 0, count: 20),
     ]);
-    final detail = results[0];
-    final comments = results[1];
+    final detail = results[0] as Map<String, dynamic>;
+    final commentsPage = results[1] as TopicCommentsResult;
     final group = detail['group'] is Map<String, dynamic> ? detail['group'] as Map<String, dynamic> : null;
     final rawContent = (detail['content'] as String?) ?? '';
     // Pictures: the structured photos array first; the <img> URLs
@@ -793,7 +805,8 @@ class RealDoubanRepository implements DoubanRepository {
       // Topic content arrives as HTML; shown raw it leaks literal
       // tags into the detail page (reported 2026-10-31).
       content: htmlToPlainText(rawContent),
-      comments: _parseList(comments['comments'], TopicComment.fromJson),
+      comments: commentsPage.comments,
+      commentsTotal: commentsPage.total,
       groupId: '${group?['id'] ?? ''}',
       groupName: (group?['name'] as String?) ?? '',
       photos: photos,

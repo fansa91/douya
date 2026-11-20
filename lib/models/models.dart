@@ -713,6 +713,7 @@ class GroupTopic {
     this.commentsCount = 0,
     this.createTime = '',
     this.coverUrl,
+    this.authorId = '',
   });
 
   final String id;
@@ -723,10 +724,18 @@ class GroupTopic {
   final String createTime;
   final String? coverUrl;
 
+  /// Author id (author.id), for "只看楼主" and opening the author's
+  /// page from a detail. The old model only kept the name.
+  final String authorId;
+
   factory GroupTopic.fromJson(Map<String, dynamic> json) {
     final author = json['author'];
     String name = '';
-    if (author is Map) name = (author['name'] as String?) ?? '';
+    String authorId = '';
+    if (author is Map) {
+      name = (author['name'] as String?) ?? '';
+      authorId = '${author['id'] ?? ''}';
+    }
     return GroupTopic(
       id: '${json['id'] ?? ''}',
       title: (json['title'] as String?) ?? '',
@@ -735,6 +744,7 @@ class GroupTopic {
       commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
       coverUrl: json['cover_url'] as String?,
+      authorId: authorId,
     );
   }
 }
@@ -746,6 +756,9 @@ class TopicComment {
     this.voteCount = 0,
     this.createTime = '',
     this.authorAvatar,
+    this.authorId = '',
+    this.ipLocation,
+    this.refComment,
   });
 
   final String authorName;
@@ -754,16 +767,40 @@ class TopicComment {
   final String createTime;
   final String? authorAvatar;
 
-  factory TopicComment.fromJson(Map<String, dynamic> json) {
+  /// Author id (author.id), for "只看楼主" and opening the author's
+  /// page. The old model only kept the name.
+  final String authorId;
+
+  /// IP 属地 (ip_location, a plain string, verified guest-visible
+  /// 2026-11-21). Null when the API omits it; never inferred from
+  /// author.loc, which is the user's home location, not the IP.
+  final String? ipLocation;
+
+  /// The quoted reply (ref_comment), one level only: a reply quotes
+  /// the comment it answers. Null for top-level comments.
+  final TopicComment? refComment;
+
+  factory TopicComment.fromJson(Map<String, dynamic> json, {bool includeRef = true}) {
     final author = json['author'];
     String name = '';
-    if (author is Map) name = (author['name'] as String?) ?? '';
+    String authorId = '';
+    if (author is Map) {
+      name = (author['name'] as String?) ?? '';
+      authorId = '${author['id'] ?? ''}';
+    }
+    final ip = json['ip_location'];
+    final ref = json['ref_comment'];
     return TopicComment(
       authorName: name,
       text: (json['text'] as String?) ?? '',
       voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
       createTime: (json['create_time'] as String?) ?? '',
       authorAvatar: authorAvatarOf(author),
+      authorId: authorId,
+      ipLocation: ip is String && ip.isNotEmpty ? ip : null,
+      refComment: includeRef && ref is Map<String, dynamic>
+          ? TopicComment.fromJson(ref, includeRef: false)
+          : null,
     );
   }
 }
@@ -1011,6 +1048,7 @@ class TopicDetail {
     required this.topic,
     this.content = '',
     this.comments = const [],
+    this.commentsTotal = 0,
     this.groupId = '',
     this.groupName = '',
     this.photos = const [],
@@ -1022,6 +1060,11 @@ class TopicDetail {
   final GroupTopic topic;
   final String content;
   final List<TopicComment> comments;
+
+  /// The comments endpoint's `total` (== topic.commentsCount when
+  /// the topic is fresh). The footer uses it to decide whether
+  /// more pages exist; the header falls back to commentsCount.
+  final int commentsTotal;
 
   /// Attached pictures, from the detail response's `photos` array
   /// (Photo-shaped, image.large/normal as size objects). When the

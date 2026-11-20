@@ -255,17 +255,60 @@ Future<SearchGroup> fetchGroupDetail(String groupId) async {
   return SearchGroup(id: groupId, name: '示例小组', memberCount: 1494, description: '离线示例，真实数据走 Frodo /group/{id}');
 }
 
+/// 25 fake replies: enough for two pages (20 + 5). The first is
+/// by the topic author (for the 楼主 badge); one quotes another
+/// comment; every third one carries an ip_location.
+static List<TopicComment> get _fakeTopicComments {
+  final comments = <TopicComment>[];
+  for (var i = 0; i < 25; i++) {
+    final isAuthor = i == 0;
+    comments.add(TopicComment(
+      authorName: isAuthor ? '房东' : '路人$i',
+      authorId: isAuthor ? 'u-landlord' : 'u-$i',
+      text: isAuthor
+          ? '我是房东，房子还在'
+          : i == 1
+              ? '请问还可以看房吗？'
+              : i == 2
+                  ? '已私信'
+                  : '回复内容$i',
+      voteCount: isAuthor ? 30 : i == 1 ? 12 : i == 2 ? 8 : 24 - i,
+      createTime: '2026-11-20 10:00',
+      ipLocation: i % 3 == 0 ? '上海' : null,
+      refComment: i == 2
+          ? const TopicComment(authorName: '路人1', authorId: 'u-1', text: '请问还可以看房吗？', voteCount: 12)
+          : null,
+    ));
+  }
+  return comments;
+}
+
+@override
+Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, int count = 20}) async {
+  final total = _fakeTopicComments.length;
+  final page = start < total
+      ? _fakeTopicComments.sublist(start, (start + count).clamp(0, total))
+      : const <TopicComment>[];
+  return TopicCommentsResult(comments: page, total: total);
+}
+
 @override
 Future<TopicDetail> fetchTopic(String topicId) async {
-return const TopicDetail(
-topic: GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 12),
-groupId: '146409',
-groupName: '上海租房',
-content: '话题正文放在这里。访客版只读，不提供回复入口。',
-comments: [
-TopicComment(authorName: '路人', text: '请问还可以看房吗？', voteCount: 2),
-],
-);
+  final page = await fetchTopicComments(topicId, start: 0, count: 20);
+  return TopicDetail(
+    topic: const GroupTopic(
+      id: '504122375',
+      title: '8号线杨思民用水电 押一付一',
+      authorName: '房东',
+      authorId: 'u-landlord',
+      commentsCount: 25,
+    ),
+    groupId: '146409',
+    groupName: '上海租房',
+    content: '话题正文放在这里。访客版只读，不提供回复入口。',
+    comments: page.comments,
+    commentsTotal: page.total,
+  );
 }
 
 @override
