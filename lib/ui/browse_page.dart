@@ -11,7 +11,12 @@ import 'widgets.dart';
 /// live on the Discover page, stacked vertically. Each section is a
 /// horizontal poster row; its 更多 button switches Browse itself to
 /// that section's category/filter (no extra page is pushed).
-class _RecommendSections extends StatelessWidget {
+///
+/// Stateful so the sections future is created once in initState:
+/// as a StatelessWidget it was created in build, and the shell's
+/// LayoutBuilder rebuilds the whole tab on every resize, so every
+/// window drag re-fetched the sections and flashed the spinner.
+class _RecommendSections extends StatefulWidget {
   const _RecommendSections({
     required this.repository,
     required this.onOpenSection,
@@ -23,9 +28,24 @@ class _RecommendSections extends StatelessWidget {
   final void Function(Subject subject) onOpenSubject;
 
   @override
+  State<_RecommendSections> createState() => _RecommendSectionsState();
+}
+
+class _RecommendSectionsState extends State<_RecommendSections> {
+  late Future<List<HomeSection>> _future = widget.repository.fetchHomeSections();
+
+  @override
+  void didUpdateWidget(covariant _RecommendSections oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository) {
+      _future = widget.repository.fetchHomeSections();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<HomeSection>>(
-      future: repository.fetchHomeSections(),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingList();
@@ -50,7 +70,7 @@ class _RecommendSections extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => onOpenSection(section),
+                    onPressed: () => widget.onOpenSection(section),
                     child: const Text('更多 >'),
                   ),
                 ],
@@ -75,7 +95,7 @@ class _RecommendSections extends StatelessWidget {
                       width: 120,
                       child: SubjectPosterCard(
                         subject: section.items[i],
-                        onTap: () => onOpenSubject(section.items[i]),
+                        onTap: () => widget.onOpenSubject(section.items[i]),
                       ),
                     ),
                   ),

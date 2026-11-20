@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:douya/data/fake_repository.dart';
+import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
 import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
@@ -286,6 +287,88 @@ void main() {
     expect(find.text('加载更多'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  // Task 1 (new plan): a resize must not re-fetch. The counting
+  // repository lives in the test, not in lib/data (which the plan
+  // forbids touching).
+  testWidgets('recommend sections do not refetch on resize', (tester) async {
+    final repository = _CountingRepository();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    // Pump the shell: its LayoutBuilder rebuilds the whole tab on
+    // resize, which is the real-app path that re-creates the
+    // sections widget (and its future) on every resize.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdaptiveScaffold(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('书影音'));
+    await tester.pumpAndSettle();
+    expect(repository.homeSectionsCalls, 1);
+    tester.view.physicalSize = const Size(800, 600);
+    await tester.pump();
+    await tester.pump();
+    expect(repository.homeSectionsCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('topic detail refetches only on topic change', (tester) async {
+    final repository = _CountingRepository();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    // The LayoutBuilder stands in for the ancestors that rebuild
+    // the detail view on resize in the real app (the shell's
+    // LayoutBuilder in the group tab, main.dart's MediaQuery
+    // builder for a pushed page): without it a resize only
+    // re-lays out, it does not rebuild the widget.
+    Widget page(String topicId) => MaterialApp(
+          home: _scaffolded(
+            LayoutBuilder(
+              builder: (context, constraints) => TopicDetailView(
+                repository: repository,
+                topicId: topicId,
+              ),
+            ),
+          ),
+        );
+    await tester.pumpWidget(page('504122375'));
+    await tester.pumpAndSettle();
+    expect(repository.topicCalls, 1);
+    tester.view.physicalSize = const Size(800, 600);
+    await tester.pump();
+    await tester.pump();
+    expect(repository.topicCalls, 1);
+    await tester.pumpWidget(page('503570060'));
+    await tester.pumpAndSettle();
+    expect(repository.topicCalls, 2);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Counts how often the two refetch-prone calls run, so the task-1
+/// tests can tell a rebuild from a re-fetch. Extends the fake
+/// repository instead of touching lib/data (forbidden by the plan).
+class _CountingRepository extends FakeDoubanRepository {
+  int homeSectionsCalls = 0;
+  int topicCalls = 0;
+
+  @override
+  Future<List<HomeSection>> fetchHomeSections() {
+    homeSectionsCalls++;
+    return super.fetchHomeSections();
+  }
+
+  @override
+  Future<TopicDetail> fetchTopic(String topicId) {
+    topicCalls++;
+    return super.fetchTopic(topicId);
+  }
 }
 
 /// Task 5: on desktop the footer auto-loads 3 pages, then pauses

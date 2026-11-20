@@ -519,16 +519,36 @@ class TopicDetailPage extends StatelessWidget {
   }
 }
 
-class TopicDetailView extends StatelessWidget {
+/// Stateful so the topic future is created once in initState: as a
+/// StatelessWidget it was created in build, and the ancestors that
+/// rebuild this view on resize (the group tab's LayoutBuilder, and
+/// main.dart's MediaQuery builder for a pushed page) re-fetched the
+/// topic and flashed the spinner on every window drag.
+class TopicDetailView extends StatefulWidget {
   const TopicDetailView({super.key, required this.repository, required this.topicId});
 
   final DoubanRepository repository;
   final String topicId;
 
   @override
+  State<TopicDetailView> createState() => _TopicDetailViewState();
+}
+
+class _TopicDetailViewState extends State<TopicDetailView> {
+  late Future<TopicDetail> _future = widget.repository.fetchTopic(widget.topicId);
+
+  @override
+  void didUpdateWidget(covariant TopicDetailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.topicId != widget.topicId) {
+      _future = widget.repository.fetchTopic(widget.topicId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<TopicDetail>(
-      future: repository.fetchTopic(topicId),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingList();
@@ -623,7 +643,7 @@ class TopicDetailView extends StatelessWidget {
                     : () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => GroupTopicsPage(repository: repository, groupId: detail.groupId),
+                            builder: (_) => GroupTopicsPage(repository: widget.repository, groupId: detail.groupId),
                           ),
                         );
                       },
