@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,27 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SettingsStore.instance.init();
   runApp(const DouyaApp());
+}
+
+/// Desktop mouse drag for every scrollable. The framework's
+/// default dragDevices has no mouse, so horizontal rows (and
+/// vertical lists) could not be dragged with a mouse; this adds
+/// mouse to the defaults and leaves everything else untouched.
+/// Plain wheel still scrolls vertically (Shift+wheel flips to
+/// horizontal, as the framework provides); the rows that also get
+/// arrows and a scrollbar use HScrollRow (task 2 of the 7-task plan).
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.unknown,
+      };
 }
 
 /// Repository selection, decided by whether keys were passed in:
@@ -54,6 +77,7 @@ class DouyaApp extends StatelessWidget {
           return MaterialApp(
             title: 'douya',
             debugShowCheckedModeBanner: false,
+            scrollBehavior: const AppScrollBehavior(),
             navigatorKey: appNavigatorKey,
             theme: ThemeData(
               colorScheme: lightScheme,

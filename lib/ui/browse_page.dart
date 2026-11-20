@@ -78,27 +78,23 @@ class _RecommendSectionsState extends State<_RecommendSections> {
               const SizedBox(height: 12),
               SizedBox(
                 height: 220,
-                // Mouse drag for the poster row: same default-behavior
-                // gap as HScrollRow (no mouse in dragDevices), but a
-                // plain scroll view here — arrows/scrollbar would not
-                // fit the 220-high row, so drag only.
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    dragDevices: kHorizontalDragDevices,
-                    scrollbars: false,
-                  ),
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: section.items.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 12),
-                    itemBuilder: (_, i) => SizedBox(
-                      width: 120,
-                      child: SubjectPosterCard(
-                        subject: section.items[i],
-                        onTap: () => widget.onOpenSubject(section.items[i]),
+                // HScrollRow: mouse drag + desktop scrollbar + arrows.
+                // The global scroll behavior (main.dart) covers drag
+                // for plain rows too, but the arrows and scrollbar
+                // live here. No own padding: the outer ListView
+                // already pads 16.
+                child: HScrollRow(
+                  spacing: 12,
+                  children: [
+                    for (final item in section.items)
+                      SizedBox(
+                        width: 120,
+                        child: SubjectPosterCard(
+                          subject: item,
+                          onTap: () => widget.onOpenSubject(item),
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),

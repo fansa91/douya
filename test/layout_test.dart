@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:douya/data/fake_repository.dart';
+import 'package:douya/main.dart';
 import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
 import 'package:douya/ui/browse_page.dart';
@@ -10,6 +12,7 @@ import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/subject_page.dart';
 import 'package:douya/ui/widgets.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -378,6 +381,81 @@ void main() {
     final stateAfter =
         tester.state<State>(find.byType(BrowsePage, skipOffstage: false));
     expect(identical(stateBefore, stateAfter), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Task 3 (new plan): the global scroll behavior adds mouse drag.
+  test('AppScrollBehavior includes mouse drag', () {
+    const behavior = AppScrollBehavior();
+    expect(behavior.dragDevices, contains(PointerDeviceKind.mouse));
+    expect(behavior.dragDevices, contains(PointerDeviceKind.touch));
+    expect(behavior.dragDevices, contains(PointerDeviceKind.trackpad));
+  });
+
+  testWidgets('global scroll behavior lets the mouse drag a plain row',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        scrollBehavior: const AppScrollBehavior(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < 10; i++)
+                  SizedBox(width: 120, height: 100, child: Text('box$i')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final before = tester.getTopLeft(find.text('box0'));
+    await tester.timedDrag(
+      find.text('box0'),
+      const Offset(-300, 0),
+      const Duration(milliseconds: 300),
+      buttons: kPrimaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    final after = tester.getTopLeft(find.text('box0'));
+    expect(after.dx, lessThan(before.dx));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('HScrollRow arrows scroll the row', (tester) async {
+    tester.view.physicalSize = const Size(800, 200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 800,
+            height: 120,
+            child: HScrollRow(
+              children: [
+                for (var i = 0; i < 10; i++)
+                  SizedBox(width: 120, height: 100, child: Text('card$i')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('向右滚动'), findsOneWidget);
+    final before = tester.getTopLeft(find.text('card0'));
+    await tester.tap(find.byTooltip('向右滚动'));
+    await tester.pumpAndSettle();
+    final after = tester.getTopLeft(find.text('card0'));
+    expect(after.dx, lessThan(before.dx - 200));
     expect(tester.takeException(), isNull);
   });
 }
