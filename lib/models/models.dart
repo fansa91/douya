@@ -794,14 +794,14 @@ const browseFilters = <String, List<BrowseFilter>>{
     BrowseFilter('soon', '即将上映'),
     BrowseFilter('recent', '近期热门'),
     BrowseFilter('top250', 'Top250'),
-    BrowseFilter('recommend', '推荐'),
+    BrowseFilter('recommend', '精选'),
     BrowseFilter('hot_gaia', '豆瓣热门'),
     BrowseFilter('filter', '多维筛选'),
   ],
   'tv': [
     BrowseFilter('recent', '近期热门'),
     BrowseFilter('hot', '热门剧集'),
-    BrowseFilter('recommend', '推荐'),
+    BrowseFilter('recommend', '精选'),
     BrowseFilter('filter', '多维筛选'),
   ],
   'book': [

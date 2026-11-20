@@ -104,11 +104,15 @@ Future<void> showLinkMenu(
 /// with a list reset: the pages show a full loading state then,
 /// unmounting the footer.
 class LoadMoreFooter extends StatefulWidget {
-  const LoadMoreFooter({super.key, required this.canLoadMore, required this.onLoadMore, this.countText});
+  const LoadMoreFooter({super.key, required this.canLoadMore, required this.onLoadMore, this.countText, this.failed = false});
 
   final bool Function() canLoadMore;
   final VoidCallback onLoadMore;
   final String? countText;
+
+  /// The last load-more attempt failed: show a retry button and
+  /// stop auto-loading until the user taps it.
+  final bool failed;
 
   @override
   State<LoadMoreFooter> createState() => _LoadMoreFooterState();
@@ -135,8 +139,7 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
   }
 
   void _maybeLoad() {
-    if (!mounted) return;
-    if (_paused) return;
+    if (!mounted || widget.failed || _paused) return;
     if (widget.canLoadMore()) {
       _autoPages++;
       widget.onLoadMore();
@@ -160,7 +163,13 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
               Text(widget.countText!),
               const SizedBox(height: 8),
             ],
-            if (widget.canLoadMore())
+            if (widget.failed)
+              TextButton.icon(
+                onPressed: _loadMoreManually,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('加载失败，点击重试'),
+              )
+            else if (widget.canLoadMore())
               if (_paused)
                 OutlinedButton(
                   onPressed: _loadMoreManually,
@@ -175,6 +184,24 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
       ),
     );
   }
+}
+
+/// Full-page failure state: a short message and a retry button.
+/// The raw exception is never shown to the user; callers log it
+/// with debugPrint instead.
+class RetryState extends StatelessWidget {
+  const RetryState({super.key, required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+        ]),
+      );
 }
 
 /// Poster card for grids. [isDoulist] subjects render a list badge

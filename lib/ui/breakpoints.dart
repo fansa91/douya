@@ -71,3 +71,24 @@ class Breakpoints {
   static int posterColumns(double width) =>
       ((width - 48) / 240).floor().clamp(2, 5);
 }
+
+/// Poster grid: column count from a target cell width, with the
+/// cover area fixed at 2:3.
+class PosterGridSpec {
+  const PosterGridSpec({required this.columns, required this.cellWidth, required this.cellHeight});
+  final int columns;
+  final double cellWidth;
+  final double cellHeight;
+
+  static const double gap = 16;
+  static const double targetWidth = 170;
+
+  /// [available]: the width after removing the left/right padding;
+  /// [textScale]: MediaQuery.textScalerOf(context).scale(14) / 14
+  factory PosterGridSpec.fit(double available, double textScale) {
+    final cols = ((available + gap) / (targetWidth + gap)).floor().clamp(2, 8);
+    final w = (available - gap * (cols - 1)) / cols;
+    final textH = 8 + 2 + 2 * 20 * textScale; // spacing + title row + rating row
+    return PosterGridSpec(columns: cols, cellWidth: w, cellHeight: w * 1.5 + textH);
+  }
+}

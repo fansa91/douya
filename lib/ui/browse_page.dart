@@ -131,7 +131,13 @@ class _BrowsePageState extends State<BrowsePage> {
   int _total = 0;
   bool _loading = true;
   bool _loadingMore = false;
+  bool _loadMoreFailed = false;
   String? _error;
+
+  /// Sequence of the currently valid request: bumping it in _load
+  /// invalidates every in-flight request, so a slow old response
+  /// can never overwrite a newer list.
+  int _seq = 0;
 
   @override
   void initState() {
@@ -150,24 +156,18 @@ class _BrowsePageState extends State<BrowsePage> {
   }
 
   Future<void> _load() async {
+    final seq = ++_seq; // any older request is invalid from here on
     // The 推荐 category and the 多维筛选 filter do not use
     // fetchBrowse at all; they render their own views, which drive
     // their own searches.
-    if (_category == 'recommend') {
+    if (_category == 'recommend' || _filter == 'filter') {
       setState(() {
         _loading = false;
         _error = null;
         _items = [];
         _total = 0;
-      });
-      return;
-    }
-    if (_filter == 'filter') {
-      setState(() {
-        _loading = false;
-        _error = null;
-        _items = [];
-        _total = 0;
+        _loadingMore = false;
+        _loadMoreFailed = false;
       });
       return;
     }
@@ -176,44 +176,56 @@ class _BrowsePageState extends State<BrowsePage> {
       _error = null;
       _items = [];
       _total = 0;
+      _loadingMore = false;
+      _loadMoreFailed = false;
     });
     try {
       final result = await widget.repository.fetchBrowse(_category, _filter, start: 0, count: 20);
-      if (mounted) {
-        setState(() {
-          _items = result.items;
-          _total = result.total;
-          _loading = false;
-        });
-      }
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _items = result.items;
+        _total = result.total;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      debugPrint('browse load failed: $e');
+      if (!mounted || seq != _seq) return;
+      // No finally block: an old request must not be able to turn
+      // _loading back off after a newer one started.
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
     }
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || _items.length >= _total) return;
-    setState(() => _loadingMore = true);
+    final seq = _seq;
+    setState(() {
+      _loadingMore = true;
+      _loadMoreFailed = false;
+    });
     try {
       final result = await widget.repository.fetchBrowse(_category, _filter, start: _items.length, count: 20);
-      if (mounted) {
-        setState(() {
-          _items = [..._items, ...result.items];
-          if (result.total > 0) _total = result.total;
-          // An empty page with items still outstanding means the
-          // list is exhausted; without this the auto-load footer
-          // below would re-trigger forever.
-          if (result.items.isEmpty) _total = _items.length;
-        });
-      }
+      if (!mounted || seq != _seq) return; // category changed meanwhile: drop it
+      setState(() {
+        _items = [..._items, ...result.items];
+        if (result.total > 0) _total = result.total;
+        // An empty page with items still outstanding means the
+        // list is exhausted; without this the auto-load footer
+        // below would re-trigger forever.
+        if (result.items.isEmpty) _total = _items.length;
+        _loadingMore = false;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多失败：$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      debugPrint('browse loadMore failed: $e');
+      if (!mounted || seq != _seq) return;
+      // No SnackBar: the footer's retry button takes over.
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
     }
   }
 
@@ -314,6 +326,7 @@ class _BrowsePageState extends State<BrowsePage> {
                             final columns = Breakpoints.posterColumns(contentWidth);
                             final footer = LoadMoreFooter(
                               countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+                              failed: _loadMoreFailed,
                               canLoadMore: () => !_loadingMore && hasMore,
                               onLoadMore: _loadMore,
                             );
