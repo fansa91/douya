@@ -506,12 +506,19 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The arrows are hover-only now: move a mouse over the row
+    // before the arrow becomes hittable.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(find.byType(HScrollRow)));
+    await mouse.moveTo(tester.getCenter(find.byType(HScrollRow)));
+    await tester.pumpAndSettle();
     expect(find.byTooltip('向右滚动'), findsOneWidget);
     final before = tester.getTopLeft(find.text('card0'));
     await tester.tap(find.byTooltip('向右滚动'));
     await tester.pumpAndSettle();
     final after = tester.getTopLeft(find.text('card0'));
     expect(after.dx, lessThan(before.dx - 200));
+    await mouse.removePointer();
     expect(tester.takeException(), isNull);
   });
 

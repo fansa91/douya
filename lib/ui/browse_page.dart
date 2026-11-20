@@ -55,53 +55,59 @@ class _RecommendSectionsState extends State<_RecommendSections> {
         }
         final sections = snapshot.data ?? const [];
         if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
-        return CenteredWidth(
-          maxWidth: Breakpoints.gridMaxWidth,
-          child: ListView(
+        // No own CenteredWidth: the outer build already centers.
+        // Card width follows the window; the row height is the
+        // 2:3 cover plus the title/rating text and room for the
+        // scrollbar.
+        return LayoutBuilder(builder: (context, c) {
+          final cardW = c.maxWidth < 600 ? 120.0 : c.maxWidth < 1200 ? 140.0 : 160.0;
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final rowH = cardW * 1.5 + 8 + 2 + 2 * 20 * scale + 8;
+          return ListView(
             padding: const EdgeInsets.all(16),
-          children: [
-            for (final section in sections) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      section.title,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => widget.onOpenSection(section),
-                    child: const Text('更多 >'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 220,
-                // HScrollRow: mouse drag + desktop scrollbar + arrows.
-                // The global scroll behavior (main.dart) covers drag
-                // for plain rows too, but the arrows and scrollbar
-                // live here. No own padding: the outer ListView
-                // already pads 16.
-                child: HScrollRow(
-                  spacing: 12,
+            children: [
+              for (final section in sections) ...[
+                Row(
                   children: [
-                    for (final item in section.items)
-                      SizedBox(
-                        width: 120,
-                        child: SubjectPosterCard(
-                          subject: item,
-                          onTap: () => widget.onOpenSubject(item),
-                        ),
+                    Expanded(
+                      child: Text(
+                        section.title,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
+                    ),
+                    TextButton(
+                      onPressed: () => widget.onOpenSection(section),
+                      child: const Text('更多 >'),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: rowH,
+                  // HScrollRow: mouse drag + desktop scrollbar + arrows.
+                  // The global scroll behavior (main.dart) covers drag
+                  // for plain rows too, but the arrows and scrollbar
+                  // live here. No own padding: the outer ListView
+                  // already pads 16.
+                  child: HScrollRow(
+                    spacing: 12,
+                    children: [
+                      for (final item in section.items)
+                        SizedBox(
+                          width: cardW,
+                          child: SubjectPosterCard(
+                            subject: item,
+                            onTap: () => widget.onOpenSubject(item),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
             ],
-          ],
-        )
-        );
+          );
+        });
       },
     );
   }
@@ -262,113 +268,115 @@ class _BrowsePageState extends State<BrowsePage> {
     );
   }
 
+  static const _pad = 16.0;
+
   @override
   Widget build(BuildContext context) {
     final filters = browseFilters[_category]!;
-    final hasMore = _total > 0 && _items.length < _total;
-    return Column(
-      children: [
+    final facet = filters.any((f) => f.id == 'filter');
+    final listFilters = filters.where((f) => f.id != 'filter').toList();
+    return CenteredWidth(
+      maxWidth: Breakpoints.gridMaxWidth,
+      child: Column(children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: HScrollRow(
-            children: [
-              for (final c in _categories)
-                ChoiceChip(
-                  label: Text(browseCategoryLabels[c]!),
-                  selected: _category == c,
-                  onSelected: (_) => _selectCategory(c),
-                ),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(_pad, 16, _pad, 4),
+          child: HScrollRow(children: [
+            for (final c in _categories)
+              ChoiceChip(
+                label: Text(browseCategoryLabels[c]!),
+                selected: _category == c,
+                onSelected: (_) => _selectCategory(c),
+              ),
+          ]),
         ),
         if (_category != 'recommend')
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: HScrollRow(
-              children: [
-                for (final f in filters)
-                  ChoiceChip(
-                    label: Text(f.label),
-                    selected: _filter == f.id,
-                    onSelected: (_) => _selectFilter(f.id),
-                  ),
+            padding: const EdgeInsets.fromLTRB(_pad, 4, _pad, 8),
+            child: Row(children: [
+              Expanded(
+                child: HScrollRow(children: [
+                  for (final f in listFilters)
+                    ChoiceChip(
+                      label: Text(f.label),
+                      selected: _filter == f.id,
+                      onSelected: (_) => _selectFilter(f.id),
+                    ),
+                ]),
+              ),
+              if (facet) ...[
+                // The faceted filter stays pinned at the right end
+                // of the row instead of scrolling away with the
+                // other chips, so it is always reachable on phones.
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.tune, size: 18),
+                  label: const Text('多维筛选'),
+                  selected: _filter == 'filter',
+                  onSelected: (_) => _selectFilter('filter'),
+                ),
               ],
-            ),
+            ]),
           ),
-        Expanded(
-          child: _category == 'recommend'
-              ? _RecommendSections(
-                  repository: widget.repository,
-                  onOpenSection: _openSection,
-                  onOpenSubject: _openSubject,
-                )
-              : _filter == 'filter'
-              ? FacetedView(
-                  key: ValueKey(_category),
-                  repository: widget.repository,
-                  endpoint: _category,
-                )
-              : _loading
-                  ? const LoadingList()
-                  : _error != null
-                      ? EmptyState(message: '加载失败：$_error')
-                      : _items.isEmpty
-                          ? const EmptyState(message: '该分类暂无内容')
-                          : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isGrid = Breakpoints.of(constraints.maxWidth) != WindowSize.compact;
-                            // Desktop poster grid: cap the row at 1440 and
-                            // derive the column count from a ~240 poster
-                            // width (c001apk's card columns derive from a
-                            // fixed card width the same way), instead of
-                            // stretching 4-5 posters across any window.
-                            final contentWidth = constraints.maxWidth > Breakpoints.gridMaxWidth ? Breakpoints.gridMaxWidth : constraints.maxWidth;
-                            final columns = Breakpoints.posterColumns(contentWidth);
-                            final footer = LoadMoreFooter(
-                              countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
-                              failed: _loadMoreFailed,
-                              canLoadMore: () => !_loadingMore && hasMore,
-                              onLoadMore: _loadMore,
-                            );
-                            return CenteredWidth(
-                              maxWidth: Breakpoints.gridMaxWidth,
-                              child: isGrid
-                                  ? CustomScrollView(
-                                      slivers: [
-                                        SliverPadding(
-                                          padding: const EdgeInsets.all(24),
-                                          sliver: SliverGrid.builder(
-                                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: columns,
-                                              mainAxisSpacing: 16,
-                                              crossAxisSpacing: 16,
-                                              childAspectRatio: 0.68,
-                                            ),
-                                            itemCount: _items.length,
-                                            itemBuilder: (_, i) => SubjectPosterCard(
-                                              subject: _items[i],
-                                              onTap: () => _openSubject(_items[i]),
-                                            ),
-                                          ),
-                                        ),
-                                        SliverToBoxAdapter(child: footer),
-                                      ],
-                                    )
-                                  : ListView.builder(
-                                      itemCount: _items.length + 1,
-                                      itemBuilder: (_, i) {
-                                        if (i >= _items.length) return footer;
-                                        return SubjectRow(
-                                          subject: _items[i],
-                                          onTap: () => _openSubject(_items[i]),
-                                        );
-                                      },
-                                    ),
-                            );
-                          },
-                        ),
-        ),
-      ],
+        Expanded(child: _body()),
+      ]),
     );
+  }
+
+  Widget _body() {
+    if (_category == 'recommend') {
+      return _RecommendSections(
+          repository: widget.repository,
+          onOpenSection: _openSection,
+          onOpenSubject: _openSubject);
+    }
+    if (_filter == 'filter') {
+      return FacetedView(
+          key: ValueKey(_category),
+          repository: widget.repository,
+          endpoint: _category);
+    }
+    if (_loading) return const LoadingList();
+    if (_error != null) return RetryState(message: '加载失败', onRetry: _load);
+    if (_items.isEmpty) return const EmptyState(message: '该分类暂无内容');
+
+    final hasMore = _total > 0 && _items.length < _total;
+    final footer = LoadMoreFooter(
+      countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
+      failed: _loadMoreFailed,
+      canLoadMore: () => !_loadingMore && hasMore,
+      onLoadMore: _loadMore,
+    );
+
+    return LayoutBuilder(builder: (context, c) {
+      if (Breakpoints.of(c.maxWidth) == WindowSize.compact) {
+        return ListView.builder(
+          itemCount: _items.length + 1,
+          itemBuilder: (_, i) => i >= _items.length
+              ? footer
+              : SubjectRow(subject: _items[i], onTap: () => _openSubject(_items[i])),
+        );
+      }
+      return CustomScrollView(slivers: [
+        SliverLayoutBuilder(builder: (context, sc) {
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final spec = PosterGridSpec.fit(sc.crossAxisExtent - _pad * 2, scale);
+          return SliverPadding(
+            padding: const EdgeInsets.fromLTRB(_pad, 8, _pad, 16),
+            sliver: SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: spec.columns,
+                mainAxisSpacing: PosterGridSpec.gap,
+                crossAxisSpacing: PosterGridSpec.gap,
+                mainAxisExtent: spec.cellHeight, // the cover area is exactly 2:3
+              ),
+              itemCount: _items.length,
+              itemBuilder: (_, i) => SubjectPosterCard(
+                  subject: _items[i], onTap: () => _openSubject(_items[i])),
+            ),
+          );
+        }),
+        SliverToBoxAdapter(child: footer),
+      ]);
+    });
   }
 }

@@ -474,6 +474,7 @@ class _HScrollRowState extends State<HScrollRow> {
   final _controller = ScrollController();
   bool _canLeft = false;
   bool _canRight = false;
+  bool _hover = false;
 
   @override
   void initState() {
@@ -519,52 +520,77 @@ class _HScrollRowState extends State<HScrollRow> {
     );
   }
 
-  Widget _arrow(bool left) {
-    return IconButton(
-      icon: Icon(left ? Icons.chevron_left : Icons.chevron_right),
-      tooltip: left ? '向左滚动' : '向右滚动',
-      onPressed: () => _scrollBy(left ? -300 : 300),
-      style: IconButton.styleFrom(
-        minimumSize: const Size(32, 32),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-    );
-  }
+  /// Overlay arrow: it floats over the row's edge instead of
+  /// taking layout space, so appearing/disappearing never makes
+  /// the content jump. Only shown while the mouse hovers the row.
+  Widget _edgeArrow(bool left) => Positioned(
+        left: left ? 0 : null,
+        right: left ? null : 0,
+        top: 0,
+        bottom: 0,
+        child: Center(
+          child: AnimatedOpacity(
+            opacity: _hover ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: IgnorePointer(
+              ignoring: !_hover,
+              child: Material(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                elevation: 2,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  icon: Icon(left ? Icons.chevron_left : Icons.chevron_right),
+                  tooltip: left ? '向左滚动' : '向右滚动',
+                  onPressed: () => _scrollBy(left ? -300 : 300),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = Breakpoints.of(constraints.maxWidth) != WindowSize.compact;
-        final row = ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(
-            dragDevices: kHorizontalDragDevices,
-            scrollbars: false,
-          ),
-          child: Scrollbar(
-            controller: _controller,
-            thumbVisibility: isDesktop,
-            child: SingleChildScrollView(
+        final row = NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrows());
+            return false;
+          },
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: kHorizontalDragDevices,
+              scrollbars: false,
+            ),
+            child: Scrollbar(
               controller: _controller,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < widget.children.length; i++) ...[
-                    if (i > 0) SizedBox(width: widget.spacing),
-                    widget.children[i],
+              thumbVisibility: isDesktop && _hover, // scrollbar only on hover too
+              child: SingleChildScrollView(
+                controller: _controller,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < widget.children.length; i++) ...[
+                      if (i > 0) SizedBox(width: widget.spacing),
+                      widget.children[i],
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
         );
         if (!isDesktop) return row;
-        return Row(
-          children: [
-            if (_canLeft) _arrow(true),
-            Expanded(child: row),
-            if (_canRight) _arrow(false),
-          ],
+        return MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: Stack(children: [
+            row,
+            if (_canLeft) _edgeArrow(true),
+            if (_canRight) _edgeArrow(false),
+          ]),
         );
       },
     );
