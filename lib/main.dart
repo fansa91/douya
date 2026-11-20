@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'api/douban_client.dart';
 import 'data/fake_repository.dart';
+import 'data/local_lists.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
 import 'ui/adaptive_scaffold.dart';
@@ -13,6 +14,7 @@ import 'ui/adaptive_scaffold.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SettingsStore.instance.init();
+  await LocalLists.instance.init();
   runApp(const DouyaApp());
 }
 
