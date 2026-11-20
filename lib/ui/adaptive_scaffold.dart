@@ -101,6 +101,11 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
           );
         }
         final extended = constraints.maxWidth >= Breakpoints.extendedRail;
+        // Short windows (landscape phones, ~360 high): five labelled
+        // destinations plus the leading title overflow the rail by
+        // ~28px, so show icons only. Found by the layout tests
+        // (task 7); this is task 6's rail-height step, done early.
+        final shortHeight = constraints.maxHeight < 480;
         return Scaffold(
           body: Row(
             children: [
@@ -108,7 +113,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
                 extended: extended,
                 selectedIndex: _index,
                 onDestinationSelected: (i) => setState(() => _index = i),
-                labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+                labelType: extended || shortHeight ? NavigationRailLabelType.none : NavigationRailLabelType.all,
                 leading: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Text('douya', style: TextStyle(fontWeight: FontWeight.bold)),
