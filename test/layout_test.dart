@@ -515,6 +515,50 @@ void main() {
     expect(grey, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  // Task 6 (new plan): group split at pane 900, list 340 below a
+  // 1280 pane and 420 at/above it. The shell's rail takes 240 at
+  // these widths, so window 1100 -> pane 860 (no split), window
+  // 1440 -> pane 1200 (split, list 340), window 1600 -> pane 1360
+  // (split, list 420). Pumped once and resized between checks: a
+  // second pumpWidget would reuse the shell's state instead of
+  // starting fresh.
+  testWidgets('group split and list width follow the new plan',
+      (tester) async {
+    (bool, double) measure() {
+      final hasDetail = find.byType(TopicDetailView).evaluate().isNotEmpty;
+      final listWidth = hasDetail
+          ? tester.getSize(find.byType(ListView).first).width
+          : 0.0;
+      return (hasDetail, listWidth);
+    }
+
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AdaptiveScaffold(repository: _repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('小组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('后会友期').first);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(measure(), const (false, 0.0));
+    tester.view.physicalSize = const Size(1440, 900);
+    await tester.pump();
+    await tester.pump();
+    expect(measure(), const (true, 340.0));
+    tester.view.physicalSize = const Size(1600, 900);
+    await tester.pump();
+    await tester.pump();
+    expect(measure(), const (true, 420.0));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Counts how often the two refetch-prone calls run, so the task-1

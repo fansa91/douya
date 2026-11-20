@@ -450,20 +450,21 @@ class _GroupPageState extends State<GroupPage> {
                       ? const EmptyState(message: '该小组暂无话题')
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            // Split once the pane is at least expanded
-                            // (840): at a ~1100 window the rail takes
-                            // 240, leaving ~860, so the split shows
-                            // there. The old 1024 threshold measured
-                            // the same width but only split from
-                            // ~1260 windows. List is 360 wide until
-                            // large (1200), then 420.
-                            final size = Breakpoints.of(constraints.maxWidth);
-                            if (size == WindowSize.compact ||
-                                size == WindowSize.medium) {
+                            // Split once the pane reaches 900 (new
+                            // plan, task 6 — replaces the 840 from the
+                            // 7-task plan and the original 1024).
+                            // List is 340 wide until the pane reaches
+                            // 1280, then 420. The detail pane keeps
+                            // its own 720 split, so 1000–1280 is
+                            // "list 340 + single-column detail" and
+                            // 1280+ is "list 420 + two-column detail".
+                            if (constraints.maxWidth < Breakpoints.paneSplit) {
                               return _topicList(isDesktop: false);
                             }
-                            final listWidth =
-                                size == WindowSize.large ? 420.0 : 360.0;
+                            final listWidth = constraints.maxWidth >=
+                                    Breakpoints.groupListWide
+                                ? 420.0
+                                : 340.0;
                             final selected = _selectedTopicId ?? _topics.first.id;
                             return Row(
                               children: [

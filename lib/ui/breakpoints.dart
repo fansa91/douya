@@ -43,6 +43,10 @@ class Breakpoints {
   /// Subject detail's left-column text cap (new plan, task 5).
   static const double detailTextMaxWidth = 880;
 
+  /// Group topic list turns 420 wide at this pane width (new plan,
+  /// task 6); below it the list is 340.
+  static const double groupListWide = 1280;
+
   /// Reading/text column cap (CenteredWidth default, topic split).
   static const double textMaxWidth = 720;
 
