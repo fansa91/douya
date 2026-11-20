@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
-import 'group_page.dart';
+import 'group_topics_view.dart';
 import 'image_preview_page.dart';
 import 'video_preview_page.dart';
 import 'widgets.dart';

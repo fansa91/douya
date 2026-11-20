@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
-import 'group_page.dart';
+import 'group_topics_view.dart';
 import 'subject_page.dart';
 import 'user_page.dart';
 import 'widgets.dart';
@@ -428,9 +428,10 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => Scaffold(
-                                  appBar: AppBar(title: Text(group.name)),
-                                  body: GroupPage(repository: widget.repository, initialGroupId: group.id),
+                                builder: (_) => GroupTopicsPage(
+                                  repository: widget.repository,
+                                  groupId: group.id,
+                                  groupName: group.name,
                                 ),
                               ),
                             );

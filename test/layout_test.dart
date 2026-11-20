@@ -12,6 +12,7 @@ import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
 import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
+import 'package:douya/ui/group_topics_view.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/topic_detail_view.dart';
 import 'package:douya/ui/subject_page.dart';
@@ -560,12 +561,19 @@ void main() {
     await tester.tap(find.text('后会友期').first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    // The pushed page splits at 1100, but nothing is selected yet:
+    // the right pane is the placeholder, not a detail view.
     expect(measure(), const (false, 0.0));
-    tester.view.physicalSize = const Size(1440, 900);
+    // The pushed page has no rail, so its content width IS the
+    // window width: 1200 is below the 1280 list-wide threshold
+    // (list 340), 1440 is above it (list 420).
+    tester.view.physicalSize = const Size(1200, 900);
     await tester.pump();
     await tester.pump();
+    await tester.tap(find.text('8号线杨思民用水电 押一付一'));
+    await tester.pumpAndSettle();
     expect(measure(), const (true, 340.0));
-    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.physicalSize = const Size(1440, 900);
     await tester.pump();
     await tester.pump();
     expect(measure(), const (true, 420.0));
@@ -653,31 +661,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // Step 1 (group/user redesign): returning from an embedded group
-  // page to the hot list no longer spins forever.
-  testWidgets('embedded group page returns to a loaded hot list',
-      (tester) async {
-    tester.view.physicalSize = const Size(1440, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: _scaffolded(
-          const GroupPage(repository: _repository, initialGroupId: '146409'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('热门小组'));
-    await tester.pumpAndSettle();
-    expect(find.text('后会友期'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  // Step 1: system back in the group tab first returns to the hot
-  // list instead of leaving the app.
-  testWidgets('system back in the group tab returns to hot list',
+  // Step 4: entering a group pushes a real route (system back
+  // works); backing out returns to the hot list. This replaces the
+  // step-1 in-tab back handling, which died with _selectedGroupId.
+  testWidgets('group detail is a pushed route with system back',
       (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1.0;
@@ -693,12 +680,59 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('后会友期').first);
     await tester.pumpAndSettle();
-    // Desktop splits: the first topic opens inline in the detail pane.
-    expect(find.byType(TopicDetailView), findsOneWidget);
+    expect(find.byType(GroupDetailPage), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.byType(TopicDetailView), findsNothing);
+    expect(find.byType(GroupDetailPage), findsNothing);
     expect(find.text('后会友期'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 4: on a wide window the detail page shows a placeholder
+  // instead of auto-opening the first topic; tapping a topic fills
+  // the right pane.
+  testWidgets('group detail shows a placeholder until a topic is picked',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(
+          const GroupTopicsPage(repository: _repository, groupId: '146409'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('选择左侧话题'), findsOneWidget);
+    expect(find.byType(TopicDetailView), findsNothing);
+    await tester.tap(find.text('8号线杨思民用水电 押一付一'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择左侧话题'), findsNothing);
+    expect(find.byType(TopicDetailView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 4: the group tab has 热门 | 已收藏 segments; the favorites
+  // tab is empty until a group is starred.
+  testWidgets('group tab segments and empty favorites', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(const GroupPage(repository: _repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('热门'), findsOneWidget);
+    expect(find.text('已收藏'), findsOneWidget);
+    expect(find.text('后会友期'), findsOneWidget);
+    await tester.tap(find.text('已收藏'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('还没有收藏的小组'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
