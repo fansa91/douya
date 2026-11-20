@@ -95,6 +95,14 @@ Future<void> showLinkMenu(
 /// the list ends. Callers must make [canLoadMore] false while a
 /// load is in flight and make their load stop on an empty page,
 /// or the footer would re-trigger forever.
+///
+/// On desktop, auto-loading pauses after 3 consecutive pages and
+/// shows a 加载更多 button instead (tapping it resets the counter),
+/// so a long list does not keep fetching while the user is only
+/// scrolling past it. Mobile keeps auto-loading without a pause.
+/// The counter resets when this footer is remounted, which coincides
+/// with a list reset: the pages show a full loading state then,
+/// unmounting the footer.
 class LoadMoreFooter extends StatefulWidget {
   const LoadMoreFooter({super.key, required this.canLoadMore, required this.onLoadMore, this.countText});
 
@@ -107,6 +115,13 @@ class LoadMoreFooter extends StatefulWidget {
 }
 
 class _LoadMoreFooterState extends State<LoadMoreFooter> {
+  int _autoPages = 0;
+
+  bool get _paused {
+    if (Breakpoints.ofContext(context) == WindowSize.compact) return false;
+    return _autoPages >= 3;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -121,7 +136,16 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
 
   void _maybeLoad() {
     if (!mounted) return;
-    if (widget.canLoadMore()) widget.onLoadMore();
+    if (_paused) return;
+    if (widget.canLoadMore()) {
+      _autoPages++;
+      widget.onLoadMore();
+    }
+  }
+
+  void _loadMoreManually() {
+    setState(() => _autoPages = 0);
+    widget.onLoadMore();
   }
 
   @override
@@ -137,7 +161,13 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
               const SizedBox(height: 8),
             ],
             if (widget.canLoadMore())
-              const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+              if (_paused)
+                OutlinedButton(
+                  onPressed: _loadMoreManually,
+                  child: const Text('加载更多'),
+                )
+              else
+                const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
             else
               const Text('已全部加载'),
           ],

@@ -8,6 +8,7 @@ import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/subject_page.dart';
+import 'package:douya/ui/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -209,6 +210,16 @@ void main() {
     );
   });
 
+  // Task 5: the group split appears at expanded widths (list 360),
+  // i.e. at a ~1100 window the split is already showing.
+  testWidgets('group splits at 1100x800 (expanded, 360 list)', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(const GroupPage(repository: _repository)),
+      const Size(1100, 800),
+    );
+  });
+
   // 130% text scaling on the shell, at the two sizes that matter most.
   for (final size in [const Size(360, 800), const Size(1440, 900)]) {
     testWidgets('shell renders at $size with 130% text scaling',
@@ -235,5 +246,71 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
+  }
+
+  testWidgets('footer pauses after 3 auto-pages on desktop', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const _FooterHarness());
+    // Each auto-load needs a pump for the post-frame callback and
+    // one for the harness rebuild.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump();
+    }
+    final state =
+        tester.state<_FooterHarnessState>(find.byType(_FooterHarness));
+    expect(state.loads, 3);
+    expect(find.text('加载更多'), findsOneWidget);
+    await tester.tap(find.text('加载更多'));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump();
+    }
+    expect(state.loads, greaterThan(3));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('footer never pauses on mobile', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const _FooterHarness());
+    for (var i = 0; i < 10; i++) {
+      await tester.pump();
+    }
+    final state =
+        tester.state<_FooterHarnessState>(find.byType(_FooterHarness));
+    expect(state.loads, greaterThan(3));
+    expect(find.text('加载更多'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Task 5: on desktop the footer auto-loads 3 pages, then pauses
+/// with a 加载更多 button; tapping it resets the counter and
+/// auto-loading resumes. On mobile it never pauses.
+class _FooterHarness extends StatefulWidget {
+  const _FooterHarness();
+
+  @override
+  State<_FooterHarness> createState() => _FooterHarnessState();
+}
+
+class _FooterHarnessState extends State<_FooterHarness> {
+  int loads = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: LoadMoreFooter(
+          countText: '已加载 $loads',
+          canLoadMore: () => true,
+          onLoadMore: () => setState(() => loads++),
+        ),
+      ),
+    );
   }
 }

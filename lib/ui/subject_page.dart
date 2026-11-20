@@ -922,53 +922,67 @@ class _DesktopDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left 3/4: subject info, trailers, celebrities, photos.
-          Expanded(
-            flex: 3,
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 24),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // At large (content >= 1200) the right column is a fixed
+          // 420; below that it keeps the old 3:1 flex split. The
+          // whole row is capped at 1440 and centered, so the left
+          // column no longer stretches across ultrawide windows.
+          final wide =
+              Breakpoints.of(constraints.maxWidth) == WindowSize.large;
+          final rightColumn = Column(
+            children: [
+              const TabBar(tabs: [Tab(text: '相关视频'), Tab(text: '评论')]),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    ListView(children: [_relatedSection(detail, repository)]),
+                    ListView(children: [_commentsSection(detail, repository)]),
+                  ],
+                ),
+              ),
+            ],
+          );
+          return CenteredWidth(
+            maxWidth: Breakpoints.gridMaxWidth,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _header(detail),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(detail.summary),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _trailersPreview(context, detail.trailers),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _celebritiesRow(context, detail.celebrities, repository),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _photosPreview(context, detail, repository),
-                ),
-              ],
-            ),
-          ),
-          // Right 1/4: tabbed related videos / comments.
-          Expanded(
-            flex: 1,
-            child: Column(
-              children: [
-                const TabBar(tabs: [Tab(text: '相关视频'), Tab(text: '评论')]),
+                // Left 3/4: subject info, trailers, celebrities, photos.
                 Expanded(
-                  child: TabBarView(
+                  flex: 3,
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 24),
                     children: [
-                      ListView(children: [_relatedSection(detail, repository)]),
-                      ListView(children: [_commentsSection(detail, repository)]),
+                      _header(detail),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(detail.summary),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _trailersPreview(context, detail.trailers),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _celebritiesRow(context, detail.celebrities, repository),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _photosPreview(context, detail, repository),
+                      ),
                     ],
                   ),
                 ),
+                // Right 1/4: tabbed related videos / comments.
+                if (wide)
+                  SizedBox(width: 420, child: rightColumn)
+                else
+                  Expanded(child: rightColumn),
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
