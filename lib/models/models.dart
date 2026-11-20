@@ -232,6 +232,9 @@ const rankBoardCategories = <String, String>{
   '42': '游戏',
 };
 
+/// The unit for a board's subject count, by the same tag id.
+const rankBoardUnits = <String, String>{'49': '部', '2': '张', '3': '本', '42': '款'};
+
 class Trailer {
   const Trailer({
     required this.id,
