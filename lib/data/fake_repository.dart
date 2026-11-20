@@ -258,7 +258,7 @@ Future<SearchGroup> fetchGroupDetail(String groupId) async {
 @override
 Future<TopicDetail> fetchTopic(String topicId) async {
 return const TopicDetail(
-topic: GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东'),
+topic: GroupTopic(id: '504122375', title: '8号线杨思民用水电 押一付一', authorName: '房东', commentsCount: 12),
 groupId: '146409',
 groupName: '上海租房',
 content: '话题正文放在这里。访客版只读，不提供回复入口。',

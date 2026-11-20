@@ -66,6 +66,12 @@ class _TopicDetailViewState extends State<TopicDetailView> {
         // on its own. Narrow panes — mobile, and the group tab's
         // detail pane when the window is too small to split — keep
         // the single top-to-bottom column.
+        // The reply header shows the loaded count against the
+        // topic's total (the first 20 only are fetched); when the
+        // total is unknown (0), it shows just the loaded count.
+        final replyTitle = detail.topic.commentsCount > 0
+            ? '回复 (已加载 ${detail.comments.length} / ${detail.topic.commentsCount})'
+            : '回复 (${detail.comments.length})';
         return LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth < Breakpoints.textMaxWidth) {
@@ -74,13 +80,13 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                 children: [
                   _headerCard(context, detail),
                   const SizedBox(height: 16),
-                  SelectableText(detail.content),
+                  SelectableText(detail.content, style: const TextStyle(height: 1.6)),
                   _topicMedia(context, detail),
                   const Divider(height: 32),
-                  Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-                  for (final c in detail.comments) _commentCard(c),
+                  for (final c in detail.comments) _commentRow(c),
                 ],
               );
             }
@@ -96,7 +102,7 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                       children: [
                         _headerCard(context, detail),
                         const SizedBox(height: 16),
-                        SelectableText(detail.content),
+                        SelectableText(detail.content, style: const TextStyle(height: 1.6)),
                         _topicMedia(context, detail),
                       ],
                     ),
@@ -106,10 +112,10 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                     child: ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
-                        Text('回复 (${detail.comments.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         if (detail.comments.isEmpty) const EmptyState(message: '暂无回复'),
-                        for (final c in detail.comments) _commentCard(c),
+                        for (final c in detail.comments) _commentRow(c),
                       ],
                     ),
                   ),
@@ -129,7 +135,7 @@ class _TopicDetailViewState extends State<TopicDetailView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(detail.topic.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(detail.topic.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -181,62 +187,95 @@ class _TopicDetailViewState extends State<TopicDetailView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (hasVideo)
-          ListTile(
-            leading: detail.videoCoverUrl == null
-                ? const Icon(Icons.play_circle_outlined)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: CachedNetworkImage(
-                      imageUrl: detail.videoCoverUrl!,
-                      httpHeaders: doubanImageHeaders,
-                      width: 72,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => const Icon(Icons.play_circle_outlined),
-                    ),
-                  ),
-            title: const Text('视频'),
-            subtitle: detail.videoDuration != null && detail.videoDuration!.isNotEmpty ? Text(detail.videoDuration!) : null,
-            trailing: const Icon(Icons.play_arrow),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => VideoPreviewPage(
-                    trailers: [
-                      Trailer(
-                        id: '',
-                        title: detail.topic.title,
-                        videoUrl: detail.videoUrl,
-                        coverUrl: detail.videoCoverUrl,
-                        runtime: detail.videoDuration ?? '',
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              margin: EdgeInsets.zero,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => VideoPreviewPage(
+                        trailers: [
+                          Trailer(
+                            id: '',
+                            title: detail.topic.title,
+                            videoUrl: detail.videoUrl,
+                            coverUrl: detail.videoCoverUrl,
+                            runtime: detail.videoDuration ?? '',
+                          ),
+                        ],
+                        initialIndex: 0,
                       ),
-                    ],
-                    initialIndex: 0,
-                  ),
+                    ),
+                  );
+                },
+                child: Stack(
+                  children: [
+                    SizedBox(
+                      height: 180,
+                      width: double.infinity,
+                      child: detail.videoCoverUrl == null
+                          ? Container(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.play_circle_outlined, size: 48))
+                          : CachedNetworkImage(
+                              imageUrl: detail.videoCoverUrl!,
+                              httpHeaders: doubanImageHeaders,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) => const Icon(Icons.play_circle_outlined, size: 48),
+                            ),
+                    ),
+                    const Positioned.fill(
+                      child: Center(
+                        child: Icon(Icons.play_circle_filled, size: 56, color: Colors.white),
+                      ),
+                    ),
+                    if (detail.videoDuration != null && detail.videoDuration!.isNotEmpty)
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                          child: Text(detail.videoDuration!, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        ),
+                      ),
+                  ],
                 ),
-              );
-            },
-          ),
-        if (photoUrls.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8),
-            itemCount: photoUrls.length,
-            itemBuilder: (_, i) => GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ImagePreviewPage(urls: photoUrls, initialIndex: i)),
-                );
-              },
-              child: CachedNetworkImage(
-                imageUrl: photoUrls[i],
-                httpHeaders: doubanImageHeaders,
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
               ),
             ),
+          ),
+        if (photoUrls.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cell = (constraints.maxWidth - 16) / 3;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < photoUrls.length; i++)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => ImagePreviewPage(urls: photoUrls, initialIndex: i)),
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: photoUrls[i],
+                          httpHeaders: doubanImageHeaders,
+                          width: cell,
+                          height: cell,
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ],
@@ -253,22 +292,47 @@ class _TopicDetailViewState extends State<TopicDetailView> {
     return const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16));
   }
 
-  Widget _commentCard(TopicComment c) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        leading: _authorAvatar(c.authorAvatar),
-        title: Text(c.authorName),
-        subtitle: SelectableText(c.text),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.thumb_up_outlined, size: 16),
-            const SizedBox(width: 4),
-            Text('${c.voteCount}'),
-          ],
+  /// Flat reply row (no Card, no ListTile — its trailing would
+  /// squeeze the body): avatar, author · time, body, and the like
+  /// count at the bottom right.
+  Widget _commentRow(TopicComment c) {
+    final meta = [
+      if (c.authorName.isNotEmpty) c.authorName,
+      if (c.createTime.isNotEmpty) c.createTime,
+    ].join(' · ');
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _authorAvatar(c.authorAvatar),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (meta.isNotEmpty) Text(meta, style: Theme.of(context).textTheme.bodySmall),
+                    if (meta.isNotEmpty) const SizedBox(height: 4),
+                    SelectableText(c.text),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Spacer(),
+                        const Icon(Icons.thumb_up_outlined, size: 14),
+                        const SizedBox(width: 4),
+                        Text('${c.voteCount}', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+        const Divider(height: 1),
+      ],
     );
   }
 }

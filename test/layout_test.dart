@@ -714,6 +714,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // Step 4: the topic detail shows loaded-vs-total replies, and
+  // the reply row carries the author and the like count.
+  testWidgets('topic detail shows loaded reply count', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _scaffolded(
+          const TopicDetailPage(repository: _repository, topicId: '504122375'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('回复 (已加载 1 / 12)'), findsOneWidget);
+    expect(find.text('路人'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    final title = tester.widget<Text>(find.text('8号线杨思民用水电 押一付一'));
+    expect(title.style?.fontSize, 20);
+    expect(tester.takeException(), isNull);
+  });
+
   // Step 4: the group tab has 热门 | 已收藏 segments; the favorites
   // tab is empty until a group is starred.
   testWidgets('group tab segments and empty favorites', (tester) async {
