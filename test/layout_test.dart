@@ -10,9 +10,11 @@ import 'package:douya/data/repository.dart';
 import 'package:douya/main.dart';
 import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
+import 'package:douya/ui/breakpoints.dart';
 import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/group_topics_view.dart';
+import 'package:douya/ui/rankings_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/topic_detail_view.dart';
 import 'package:douya/ui/subject_page.dart';
@@ -154,6 +156,42 @@ Future<void> _pumpPage(WidgetTester tester, Widget page, Size size) async {
   expect(tester.takeException(), isNull);
 }
 
+/// A browse repo whose one subject carries a pic URL, so the
+/// poster card renders a real CachedNetworkImage (the test
+/// HttpClient stub serves a 1x1 PNG for any URL).
+class _PicBrowseRepo extends FakeDoubanRepository {
+  @override
+  Future<BrowseResult> fetchBrowse(String category, String filter,
+          {int start = 0, int count = 20}) async =>
+      const BrowseResult(items: [
+        Subject(
+            id: '1292052',
+            type: 'movie',
+            title: '肖申克的救赎',
+            pic: 'https://example.com/p.jpg'),
+      ], total: 1);
+}
+
+/// A browse repo whose responses only complete when the test says
+/// so, keyed by category/filter/start.
+class _SlowBrowseRepo extends FakeDoubanRepository {
+  _SlowBrowseRepo();
+  final calls = <String, Completer<BrowseResult>>{};
+  @override
+  Future<BrowseResult> fetchBrowse(String category, String filter,
+          {int start = 0, int count = 20}) =>
+      (calls['$category/$filter/$start'] = Completer<BrowseResult>()).future;
+}
+
+/// A repo whose board-items endpoint always fails.
+class _NoFullBoards extends FakeDoubanRepository {
+  const _NoFullBoards();
+  @override
+  Future<BrowseResult> fetchBoardItems(String boardId,
+          {int start = 0, int count = 20}) async =>
+      throw Exception('404');
+}
+
 void main() {
   setUpAll(() {
     HttpOverrides.global = _MockHttpOverrides();
@@ -244,6 +282,14 @@ void main() {
       );
     });
 
+    testWidgets('rankings renders at $name', (tester) async {
+      await _pumpPage(
+        tester,
+        _scaffolded(const RankingsPage(repository: _repository)),
+        size,
+      );
+    });
+
     testWidgets('settings renders at $name', (tester) async {
       await _pumpPage(tester, const SettingsPage(), size);
     });
@@ -307,6 +353,117 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  // 130% text scaling on the rankings page, at the two sizes that
+  // matter most.
+  for (final size in [const Size(360, 800), const Size(1440, 900)]) {
+    testWidgets('rankings renders at $size with 130% text scaling',
+        (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final mediaQuery = MediaQuery.of(context);
+              return MediaQuery(
+                data: mediaQuery.copyWith(
+                  textScaler: const TextScaler.linear(1.3),
+                ),
+                child: _scaffolded(const RankingsPage(repository: _repository)),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  // Step 7: the poster grid never loses columns as the window
+  // widens, and each cell stays a reasonable width.
+  //
+  // Two corrections to the first draft of this test: the content
+  // width is capped at 1440 by the page's CenteredWidth (without
+  // the cap the model keeps growing past the real layout), and the
+  // cell range is 150-270, not 150-240 — a 2-column cell peaks at
+  // ~262 just before the 3rd column appears. The failure was at
+  // window 612 (cell 241.5), not at the 1023/1024 rail switch.
+  test('poster grid never loses columns as the window widens', () {
+    var last = 0;
+    for (var w = 600.0; w <= 2560; w += 4) {
+      final rawContent = w < 1024 ? w - 81 : w - 257; // rail width estimate
+      final content = rawContent > 1440 ? 1440.0 : rawContent;
+      final spec = PosterGridSpec.fit(content - 32, 1.0);
+      expect(spec.columns, greaterThanOrEqualTo(last), reason: 'window $w');
+      expect(spec.cellWidth, inInclusiveRange(150, 270), reason: 'window $w');
+      last = spec.columns;
+    }
+  });
+
+  // Step 7: the poster's image area is close to 2:3. The fake's
+  // subjects have no pic, so this repo returns one with a pic URL
+  // (the test HttpClient stub serves a 1x1 PNG for any URL).
+  testWidgets('browse poster is close to 2:3', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(BrowsePage(repository: _PicBrowseRepo(), initialCategory: 'movie')),
+      const Size(1440, 900),
+    );
+    final s = tester.getSize(find.byType(CachedNetworkImage).first);
+    expect(s.width / s.height, inInclusiveRange(0.64, 0.70));
+  });
+
+  // Step 7: a slow old response must not overwrite a newer list.
+  //
+  // Not _pumpPage: the slow repo never completes on its own, so the
+  // loading spinner would make pumpAndSettle time out. Pump by hand
+  // until the results arrive.
+  testWidgets('browse ignores a stale response after switching filter', (tester) async {
+    final repo = _SlowBrowseRepo();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(BrowsePage(repository: repo, initialCategory: 'movie'))),
+    );
+    await tester.pump();
+    await tester.tap(find.text('即将上映'));
+    await tester.pump();
+    repo.calls['movie/soon/0']!.complete(const BrowseResult(
+        items: [Subject(id: '2', type: 'movie', title: '新结果')], total: 1));
+    await tester.pump();
+    repo.calls['movie/showing/0']!.complete(const BrowseResult(
+        items: [Subject(id: '1', type: 'movie', title: '旧结果')], total: 1));
+    await tester.pump();
+    expect(find.text('新结果'), findsOneWidget);
+    expect(find.text('旧结果'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 7: when the full board list is unavailable, the detail
+  // page keeps its previews and shows no spinner.
+  testWidgets('board detail falls back to previews quietly', (tester) async {
+    const board = RankBoard(
+      id: '1818', name: '测试榜', showRank: true,
+      previewSubjects: [
+        Subject(id: '1', type: 'movie', title: '预览一'),
+        Subject(id: '2', type: 'movie', title: '预览二'),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      const BoardDetailPage(repository: _NoFullBoards(), board: board),
+      const Size(390, 800),
+    );
+    expect(find.text('预览一'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.textContaining('完整榜单'), findsOneWidget);
+  });
 
   testWidgets('footer pauses after 3 auto-pages on desktop', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
