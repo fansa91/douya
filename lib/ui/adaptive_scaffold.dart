@@ -10,6 +10,44 @@ import 'search_page.dart';
 import 'settings_page.dart';
 import 'user_page.dart';
 
+/// Navigator key for the whole app (main.dart passes it to
+/// MaterialApp). Global shortcuts need it because their Actions run
+/// above the Navigator, where Navigator.of(context) cannot see it.
+final appNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Which tab the shell is showing (0 = Discover). Kept in sync by
+/// the shell; Ctrl/Cmd+R only refreshes when it is 0.
+final currentTab = ValueNotifier<int>(0);
+
+/// Ticked to refresh the Discover feed: the desktop top-bar button,
+/// Ctrl/Cmd+R, and HomePage's feed all use this one notifier. It
+/// lives for the app's lifetime, so it is never disposed.
+final discoverRefresh = ValueNotifier<int>(0);
+
+bool _searchOpen = false;
+
+/// Opens the search page, unless one is already open (the '/' key
+/// would otherwise stack a second search page on top).
+void openSearchPage(DoubanRepository repository) {
+  if (_searchOpen) return;
+  final navigator = appNavigatorKey.currentState;
+  if (navigator == null) return;
+  _searchOpen = true;
+  navigator
+      .push(
+        MaterialPageRoute(
+          builder: (_) => SearchPage(repository: repository),
+        ),
+      )
+      .then((_) => _searchOpen = false);
+}
+
+/// Ctrl/Cmd+R: refreshes the Discover feed, but only while Discover
+/// is the current tab (other tabs have nothing to refresh this way).
+void requestDiscoverRefresh() {
+  if (currentTab.value == 0) discoverRefresh.value++;
+}
+
 /// One shell for both form factors:
 ///   width < 600  -> bottom navigation
 ///   width >= 600 -> NavigationRail (72 narrow, 240 extended on desktop)
@@ -27,14 +65,9 @@ class AdaptiveScaffold extends StatefulWidget {
 class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
   int _index = 0;
 
-  /// Ticked by the desktop top-bar refresh button (Discover only);
-  /// HomePage's feed listens and re-fetches the first page.
-  final _discoverRefresh = ValueNotifier<int>(0);
-
-  @override
-  void dispose() {
-    _discoverRefresh.dispose();
-    super.dispose();
+  void _selectDestination(int i) {
+    setState(() => _index = i);
+    currentTab.value = i;
   }
 
   static const _labels = ['发现', '书影音', '排行榜', '小组', '我的'];
@@ -58,14 +91,12 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
         return UserPage(repository: widget.repository);
       case 0:
       default:
-        return HomePage(repository: widget.repository, refreshListenable: _discoverRefresh);
+        return HomePage(repository: widget.repository, refreshListenable: discoverRefresh);
     }
   }
 
   void _openSearch() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SearchPage(repository: widget.repository)),
-    );
+    openSearchPage(widget.repository);
   }
 
   void _openSettings() {
@@ -92,7 +123,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
             body: body,
             bottomNavigationBar: NavigationBar(
               selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              onDestinationSelected: _selectDestination,
               destinations: [
                 for (var i = 0; i < _labels.length; i++)
                   NavigationDestination(icon: Icon(_icons[i]), label: _labels[i]),
@@ -112,7 +143,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
               NavigationRail(
                 extended: extended,
                 selectedIndex: _index,
-                onDestinationSelected: (i) => setState(() => _index = i),
+                onDestinationSelected: _selectDestination,
                 labelType: extended || shortHeight ? NavigationRailLabelType.none : NavigationRailLabelType.all,
                 leading: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
@@ -154,7 +185,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
                             IconButton(
                               icon: const Icon(Icons.refresh),
                               tooltip: '刷新',
-                              onPressed: () => _discoverRefresh.value++,
+                              onPressed: () => discoverRefresh.value++,
                             ),
                           ],
                           const SizedBox(width: 8),

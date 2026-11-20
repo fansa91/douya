@@ -179,11 +179,14 @@ class _GroupPageState extends State<GroupPage> {
       if (topic.createTime.isNotEmpty) topic.createTime,
       '回应 ${topic.commentsCount}',
     ].join(' · ');
-    return Card(
+    final card = Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       color: isDesktop && _selectedTopicId == topic.id ? Theme.of(context).colorScheme.primaryContainer : null,
       child: InkWell(
         onTap: () => _openTopic(topic, isDesktop: isDesktop),
+        hoverColor:
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        mouseCursor: SystemMouseCursors.click,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -210,6 +213,14 @@ class _GroupPageState extends State<GroupPage> {
           ),
         ),
       ),
+    );
+    return GestureDetector(
+      onSecondaryTapUp: (details) => showLinkMenu(
+        context,
+        details.globalPosition,
+        topicWebUrl(topic.id),
+      ),
+      child: card,
     );
   }
 

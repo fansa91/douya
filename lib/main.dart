@@ -1,5 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'api/douban_client.dart';
 import 'data/fake_repository.dart';
@@ -53,6 +54,7 @@ class DouyaApp extends StatelessWidget {
           return MaterialApp(
             title: 'douya',
             debugShowCheckedModeBanner: false,
+            navigatorKey: appNavigatorKey,
             theme: ThemeData(
               colorScheme: lightScheme,
               // The paper background is douya's own look; it only
@@ -65,11 +67,30 @@ class DouyaApp extends StatelessWidget {
               useMaterial3: true,
             ),
             themeMode: settings.themeMode,
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(settings.fontScale),
+            // App-wide shortcuts. They sit above the Navigator (the
+            // builder wraps it), so they work on pushed pages too, and
+            // act through appNavigatorKey because Navigator.of cannot
+            // see a Navigator below this widget. A focused text field
+            // consumes '/' itself, so typing a slash never opens
+            // search; the video page consumes Esc/Space/arrows/F while
+            // fullscreen, so Esc there exits fullscreen first.
+            builder: (context, child) => CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.slash):
+                    () => openSearchPage(repository),
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    () => appNavigatorKey.currentState?.maybePop(),
+                const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+                    requestDiscoverRefresh,
+                const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
+                    requestDiscoverRefresh,
+              },
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(settings.fontScale),
+                ),
+                child: child ?? const SizedBox.shrink(),
               ),
-              child: child ?? const SizedBox.shrink(),
             ),
             home: AdaptiveScaffold(repository: repository),
           );

@@ -298,10 +298,16 @@ class _FeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    // Desktop right-click menu (copy link / open in browser). No
+    // menu when no URL can be determined for this card.
+    final url = feedItemWebUrl(item);
+    final card = Card(
       margin: margin,
       child: InkWell(
         onTap: onTap,
+        hoverColor:
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        mouseCursor: SystemMouseCursors.click,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -364,6 +370,12 @@ class _FeedCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (url == null) return card;
+    return GestureDetector(
+      onSecondaryTapUp: (details) =>
+          showLinkMenu(context, details.globalPosition, url),
+      child: card,
     );
   }
 }

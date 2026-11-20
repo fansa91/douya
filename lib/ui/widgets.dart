@@ -3,6 +3,8 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/settings.dart';
 import '../models/models.dart';
@@ -22,6 +24,66 @@ const doubanImageHeaders = <String, String>{
 /// other ImageProvider slots.
 ImageProvider<Object> doubanImageProvider(String url) =>
     CachedNetworkImageProvider(url, headers: doubanImageHeaders);
+
+/// Web URL for a subject. The model carries no URL field (the APIs
+/// never return one), so this derives the canonical web address from
+/// the subject type: movie/tv live under movie.douban.com, books
+/// under book.douban.com, music under music.douban.com.
+String subjectWebUrl(Subject subject) {
+  return switch (subject.type) {
+    'book' => 'https://book.douban.com/subject/${subject.id}/',
+    'music' => 'https://music.douban.com/subject/${subject.id}/',
+    'movie' || 'tv' => 'https://movie.douban.com/subject/${subject.id}/',
+    _ => 'https://www.douban.com/subject/${subject.id}/',
+  };
+}
+
+/// Web URL for a group topic.
+String topicWebUrl(String topicId) =>
+    'https://www.douban.com/group/topic/$topicId/';
+
+/// Web URL for a feed card: the payload's sharing URL when present,
+/// otherwise the derived topic URL for topic items. Null when no URL
+/// can be determined (e.g. a review without a sharing URL).
+String? feedItemWebUrl(FeedItem item) {
+  if (item.sharingUrl.isNotEmpty) return item.sharingUrl;
+  if (item.type == 'topic') return topicWebUrl(item.id);
+  return null;
+}
+
+/// Right-click (desktop) link menu for cards and rows: copy the link
+/// or open it in the browser. [position] is the tap's global position.
+Future<void> showLinkMenu(
+  BuildContext context,
+  Offset position,
+  String url,
+) async {
+  final choice = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      position.dx + 1,
+      position.dy + 1,
+    ),
+    items: const [
+      PopupMenuItem(value: 'copy', child: Text('复制链接')),
+      PopupMenuItem(value: 'open', child: Text('在浏览器中打开')),
+    ],
+  );
+  if (!context.mounted) return;
+  switch (choice) {
+    case 'copy':
+      await Clipboard.setData(ClipboardData(text: url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('链接已复制')),
+        );
+      }
+    case 'open':
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+}
 
 /// Footer for paged lists that loads more automatically: it calls
 /// [onLoadMore] as soon as it is built while [canLoadMore] is true.
@@ -87,53 +149,84 @@ class _LoadMoreFooterState extends State<LoadMoreFooter> {
 
 /// Poster card for grids. [isDoulist] subjects render a list badge
 /// instead of a rating, because Rexxar recommend items are mixed cards.
-class SubjectPosterCard extends StatelessWidget {
+///
+/// Desktop: hover slightly enlarges the card (1.02, non-compact
+/// only) with a pointer cursor, and right-click opens the link menu
+/// (copy link / open in browser). Mobile is unchanged.
+class SubjectPosterCard extends StatefulWidget {
   const SubjectPosterCard({super.key, required this.subject, this.onTap});
 
   final Subject subject;
   final VoidCallback? onTap;
 
   @override
+  State<SubjectPosterCard> createState() => _SubjectPosterCardState();
+}
+
+class _SubjectPosterCardState extends State<SubjectPosterCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final subject = widget.subject;
     final pic = subjectImageUrl(subject, SettingsStore.instance.imageQuality);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: pic == null
-                  ? Center(child: Text(subject.title.isEmpty ? '?' : subject.title[0]))
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: pic,
-                        httpHeaders: doubanImageHeaders,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorWidget: (context, url, error) => Center(
-                          child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
+    final isDesktop =
+        Breakpoints.ofContext(context) != WindowSize.compact;
+    return GestureDetector(
+      onSecondaryTapUp: (details) => showLinkMenu(
+        context,
+        details.globalPosition,
+        subjectWebUrl(subject),
+      ),
+      child: AnimatedScale(
+        scale: _hovered && isDesktop ? 1.02 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: InkWell(
+          onTap: widget.onTap,
+          onHover: (hovered) {
+            if (hovered != _hovered) setState(() => _hovered = hovered);
+          },
+          hoverColor:
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+          mouseCursor: SystemMouseCursors.click,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: pic == null
+                      ? Center(child: Text(subject.title.isEmpty ? '?' : subject.title[0]))
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: pic,
+                            httpHeaders: doubanImageHeaders,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorWidget: (context, url, error) => Center(
+                              child: Text(subject.title.isEmpty ? '?' : subject.title[0]),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-            ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              if (subject.isDoulist)
+                Text('豆列 · ${subject.doulistCount ?? ''} 条', style: Theme.of(context).textTheme.bodySmall)
+              else if (subject.rating != null && subject.rating!.value > 0)
+                RatingText(rating: subject.rating!)
+              else
+                Text('暂无评分', style: Theme.of(context).textTheme.bodySmall),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          if (subject.isDoulist)
-            Text('豆列 · ${subject.doulistCount ?? ''} 条', style: Theme.of(context).textTheme.bodySmall)
-          else if (subject.rating != null && subject.rating!.value > 0)
-            RatingText(rating: subject.rating!)
-          else
-            Text('暂无评分', style: Theme.of(context).textTheme.bodySmall),
-        ],
+        ),
       ),
     );
   }
@@ -150,7 +243,16 @@ class SubjectRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pic = subjectImageUrl(subject, SettingsStore.instance.imageQuality);
-    return ListTile(
+    return GestureDetector(
+      onSecondaryTapUp: (details) => showLinkMenu(
+        context,
+        details.globalPosition,
+        subjectWebUrl(subject),
+      ),
+      child: ListTile(
+        mouseCursor: SystemMouseCursors.click,
+        hoverColor:
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
       leading: Container(
         width: 56,
         height: 76,
@@ -170,11 +272,12 @@ class SubjectRow extends StatelessWidget {
                 ),
               ),
       ),
-      title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subject.cardSubtitle ?? subject.year ?? subject.type),
-      trailing: trailing ??
-          (subject.rating != null && subject.rating!.value > 0 ? RatingText(rating: subject.rating!) : null),
-      onTap: onTap,
+        title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(subject.cardSubtitle ?? subject.year ?? subject.type),
+        trailing: trailing ??
+            (subject.rating != null && subject.rating!.value > 0 ? RatingText(rating: subject.rating!) : null),
+        onTap: onTap,
+      ),
     );
   }
 }
