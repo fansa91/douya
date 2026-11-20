@@ -46,6 +46,103 @@ String htmlToPlainText(String raw) {
       .trim();
 }
 
+/// One run inside a paragraph block: plain text, or a link
+/// (<a href>) whose text stays tappable.
+class TextRun {
+  const TextRun(this.text, {this.link});
+
+  final String text;
+  final String? link;
+}
+
+/// One piece of a topic/review body, in original order: a
+/// paragraph (with link runs) or an image. No new dependency: a
+/// small hand-written parser over the <p> / <img> / <a> tags the
+/// API actually emits.
+class ContentBlock {
+  const ContentBlock.paragraph(this.runs) : imageUrl = null;
+  const ContentBlock.image(this.imageUrl) : runs = const [];
+
+  final List<TextRun> runs;
+  final String? imageUrl;
+
+  bool get isImage => imageUrl != null;
+}
+
+/// Split an HTML body into paragraph/image blocks, keeping the
+/// original order. Images nested inside a <p> are lifted out as
+/// their own blocks; bare text between blocks becomes a paragraph.
+/// Empty blocks are dropped.
+List<ContentBlock> parseContentBlocks(String html) {
+  final blocks = <ContentBlock>[];
+  final tokenRe = RegExp(
+    r'''<p[^>]*>(.*?)</p>|<img[^>]+src=["']([^"']+)["'][^>]*>''',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  var pos = 0;
+  for (final m in tokenRe.allMatches(html)) {
+    if (m.start > pos) _addTextBlock(blocks, html.substring(pos, m.start));
+    final paragraph = m.group(1);
+    if (paragraph != null) {
+      _addParagraph(blocks, paragraph);
+    } else {
+      final src = m.group(2);
+      if (src != null && src.isNotEmpty) blocks.add(ContentBlock.image(src));
+    }
+    pos = m.end;
+  }
+  if (pos < html.length) _addTextBlock(blocks, html.substring(pos));
+  return blocks;
+}
+
+void _addTextBlock(List<ContentBlock> blocks, String html) {
+  final text = htmlToPlainText(html);
+  if (text.isNotEmpty) blocks.add(ContentBlock.paragraph([TextRun(text)]));
+}
+
+/// A <p> body: split on nested <img> tags (each becomes an image
+/// block), the rest becomes link-run paragraphs.
+void _addParagraph(List<ContentBlock> blocks, String html) {
+  final imgRe = RegExp(r'''<img[^>]+src=["']([^"']+)["'][^>]*>''', caseSensitive: false);
+  var pos = 0;
+  for (final m in imgRe.allMatches(html)) {
+    if (m.start > pos) {
+      final runs = _parseRuns(html.substring(pos, m.start));
+      if (runs.isNotEmpty) blocks.add(ContentBlock.paragraph(runs));
+    }
+    final src = m.group(1);
+    if (src != null && src.isNotEmpty) blocks.add(ContentBlock.image(src));
+    pos = m.end;
+  }
+  if (pos < html.length) {
+    final runs = _parseRuns(html.substring(pos));
+    if (runs.isNotEmpty) blocks.add(ContentBlock.paragraph(runs));
+  }
+}
+
+/// Split a paragraph's inner HTML into text/link runs.
+List<TextRun> _parseRuns(String html) {
+  final runs = <TextRun>[];
+  final linkRe = RegExp(r'''<a[^>]+href=["']([^"']+)["']>(.*?)</a>''', caseSensitive: false, dotAll: true);
+  var pos = 0;
+  for (final m in linkRe.allMatches(html)) {
+    if (m.start > pos) {
+      final text = htmlToPlainText(html.substring(pos, m.start));
+      if (text.isNotEmpty) runs.add(TextRun(text));
+    }
+    final text = htmlToPlainText(m.group(2) ?? '');
+    final href = m.group(1);
+    if (text.isNotEmpty) runs.add(TextRun(text, link: href));
+    pos = m.end;
+  }
+  if (pos < html.length) {
+    final text = htmlToPlainText(html.substring(pos));
+    if (text.isNotEmpty) runs.add(TextRun(text));
+  }
+  return runs;
+}
+
 class Rating {
   const Rating({required this.value, required this.max, this.count = 0});
 
@@ -1047,10 +1144,14 @@ class TopicDetail {
   const TopicDetail({
     required this.topic,
     this.content = '',
+    this.contentHtml = '',
     this.comments = const [],
     this.commentsTotal = 0,
+    this.popularComments = const [],
     this.groupId = '',
     this.groupName = '',
+    this.sharingUrl = '',
+    this.ipLocation,
     this.photos = const [],
     this.videoUrl,
     this.videoCoverUrl,
@@ -1059,7 +1160,26 @@ class TopicDetail {
 
   final GroupTopic topic;
   final String content;
+
+  /// The raw HTML body, for the block parser (paragraphs and
+  /// images in original order). `content` is the plain-text
+  /// fallback when the HTML is empty.
+  final String contentHtml;
+
   final List<TopicComment> comments;
+
+  /// The comments endpoint's `popular_comments` (hot replies),
+  /// from the first page. Empty in every topic probed 2026-11-21,
+  /// so the page falls back to the most-liked loaded replies.
+  final List<TopicComment> popularComments;
+
+  /// The topic's share link, for copy / open-in-browser.
+  final String sharingUrl;
+
+  /// The topic's own IP 属地 (top-level `ip_location`, a plain
+  /// string, verified guest-visible 2026-11-21). Null when the
+  /// API omits it; shown in the author row when present.
+  final String? ipLocation;
 
   /// The comments endpoint's `total` (== topic.commentsCount when
   /// the topic is fresh). The footer uses it to decide whether

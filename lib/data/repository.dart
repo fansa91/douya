@@ -15,10 +15,14 @@ class InterestListResult {
 /// Same shape as InterestListResult, for the comments endpoint
 /// (verified 2026-11-21: start/count paging works, total present).
 class TopicCommentsResult {
-  const TopicCommentsResult({required this.comments, required this.total});
+  const TopicCommentsResult({required this.comments, required this.total, this.popularComments = const []});
 
   final List<TopicComment> comments;
   final int total;
+
+  /// The response's `popular_comments` (hot replies), only
+  /// meaningful on the first page.
+  final List<TopicComment> popularComments;
 }
 
 /// The only data surface the UI depends on. Swap the implementation

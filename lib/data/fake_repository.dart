@@ -289,7 +289,15 @@ Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, i
   final page = start < total
       ? _fakeTopicComments.sublist(start, (start + count).clamp(0, total))
       : const <TopicComment>[];
-  return TopicCommentsResult(comments: page, total: total);
+  // Hot replies ride on the first page only: the two most-liked
+  // replies that are not the topic author's.
+  final popular = start == 0
+      ? (_fakeTopicComments.where((c) => c.authorId != 'u-landlord').toList()
+            ..sort((a, b) => b.voteCount.compareTo(a.voteCount)))
+          .take(2)
+          .toList()
+      : const <TopicComment>[];
+  return TopicCommentsResult(comments: page, total: total, popularComments: popular);
 }
 
 @override
@@ -302,12 +310,17 @@ Future<TopicDetail> fetchTopic(String topicId) async {
       authorName: '房东',
       authorId: 'u-landlord',
       commentsCount: 25,
+      createTime: '2026-11-20 10:00',
     ),
     groupId: '146409',
     groupName: '上海租房',
-    content: '话题正文放在这里。访客版只读，不提供回复入口。',
+    content: '话题正文放在这里。相关链接第二段正文。',
+    contentHtml: '<p>话题正文放在这里。<a href="https://example.com">相关链接</a></p><img src="https://img.example/body.jpg"><p>第二段正文。</p>',
+    sharingUrl: 'https://www.douban.com/group/topic/504122375/',
+    ipLocation: '上海',
     comments: page.comments,
     commentsTotal: page.total,
+    popularComments: page.popularComments,
   );
 }
 

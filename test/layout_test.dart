@@ -922,38 +922,141 @@ void main() {
   });
 
   // Step 4: the topic detail shows loaded-vs-total replies, and
-  // the reply row carries the author and the like count.
+  // the reply row carries the author and the like count. A tall
+  // viewport is used because the body image block pushes the
+  // replies below the fold at phone height.
   testWidgets('topic detail shows loaded reply count', (tester) async {
-    tester.view.physicalSize = const Size(360, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: _scaffolded(
-          const TopicDetailPage(repository: _repository, topicId: '504122375'),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      const TopicDetailPage(repository: _repository, topicId: '504122375'),
+      const Size(390, 3000),
     );
-    await tester.pumpAndSettle();
-    // The fake topic now has 25 replies (20 on the first page).
-    expect(find.text('回复 (已加载 20 / 25)'), findsOneWidget);
-    // The meta line is one Text: author · time.
-    expect(find.text('路人1 · 2026-11-20 10:00'), findsOneWidget);
-    expect(find.text('12'), findsOneWidget);
+    // The fake topic now has 25 replies (20 on the first page);
+    // the header shows the total, and the footer the loaded count.
+    expect(find.text('回应 25'), findsOneWidget);
+    // 路人5 is not a hot reply (the fake's hot replies are 路人3
+    // and 路人4), so its nickname appears once; the meta line is
+    // a separate "时间 · IP属地" text.
+    expect(find.text('路人5'), findsOneWidget);
+    expect(find.text('19'), findsOneWidget);
     final title = tester.widget<Text>(find.text('8号线杨思民用水电 押一付一'));
     expect(title.style?.fontSize, 20);
     expect(tester.takeException(), isNull);
   });
 
-  // Step 2: the reply footer auto-loads the next page when it
-  // appears (the fake topic has 25 replies: 20 + 5). A tall
-  // viewport makes the footer visible without scrolling.
-  testWidgets('topic detail loads more comments', (tester) async {
+  // Step 3: 楼主 badge, IP 属地， quoted reply, hot replies, and
+  // the floor number. A tall viewport shows the whole page.
+  testWidgets('topic detail shows author badge, ip location, quote, hot replies', (tester) async {
     await _pumpPage(
       tester,
       const TopicDetailPage(repository: _repository, topicId: '504122375'),
       const Size(390, 3000),
+    );
+    expect(find.text('楼主'), findsOneWidget);
+    expect(find.text('热门回应'), findsOneWidget);
+    expect(find.text('路人1：请问还可以看房吗？'), findsOneWidget);
+    expect(find.text('1楼'), findsOneWidget);
+    expect(find.text('只看楼主'), findsOneWidget);
+  });
+
+  // Step 3: 只看楼主 keeps only the topic author's replies.
+  testWidgets('topic detail only-author filter', (tester) async {
+    await _pumpPage(
+      tester,
+      const TopicDetailPage(repository: _repository, topicId: '504122375'),
+      const Size(390, 3000),
+    );
+    await tester.tap(find.text('只看楼主'));
+    await tester.pumpAndSettle();
+    expect(find.text('房东'), findsOneWidget);
+    expect(find.text('路人3'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: the AppBar star bookmarks the topic, and the menu
+  // offers copy-link / open-in-browser. (The copy tap itself is
+  // not exercised: Clipboard goes through the platform channel,
+  // which has no stub in widget tests.)
+  testWidgets('topic detail star and menu', (tester) async {
+    await _pumpPage(
+      tester,
+      const TopicDetailPage(repository: _repository, topicId: '504122375'),
+      const Size(390, 800),
+    );
+    expect(find.byIcon(Icons.star_border), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.star_border));
+    await tester.pumpAndSettle();
+    expect(LocalLists.instance.isFavoriteTopic('504122375'), isTrue);
+    expect(find.byIcon(Icons.star), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    expect(find.text('复制链接'), findsOneWidget);
+    expect(find.text('浏览器打开'), findsOneWidget);
+    // Dismiss the menu before tapping the star again.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.star));
+    await tester.pumpAndSettle();
+    expect(LocalLists.instance.isFavoriteTopic('504122375'), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: while the detail loads, a skeleton replaces the spinner.
+  testWidgets('topic detail shows a skeleton while loading', (tester) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(TopicDetailPage(repository: _NeverTopicRepo(), topicId: '504122375'))),
+    );
+    await tester.pump();
+    expect(find.byType(TopicDetailSkeleton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: a failed load offers a retry, which reloads the topic.
+  testWidgets('topic detail retry after failure', (tester) async {
+    await _pumpPage(
+      tester,
+      TopicDetailPage(repository: _FlakyTopicRepo(), topicId: '504122375'),
+      const Size(390, 800),
+    );
+    expect(find.text('加载失败'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('回应 25'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 3: on desktop the replies header stays pinned while the
+  // body column scrolls.
+  testWidgets('topic detail desktop replies header stays pinned', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(const TopicDetailPage(repository: _repository, topicId: '504122375'))),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('回应 25').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // Step 2: the reply footer auto-loads the next page when it
+  // appears (the fake topic has 25 replies: 20 + 5). A tall
+  // viewport makes the footer visible without scrolling; it has
+  // to be very tall because the body image and hot section push
+  // the last replies down.
+  testWidgets('topic detail loads more comments', (tester) async {
+    await _pumpPage(
+      tester,
+      const TopicDetailPage(repository: _repository, topicId: '504122375'),
+      const Size(390, 4200),
     );
     expect(find.text('回复内容24'), findsOneWidget);
     expect(find.text('已加载 25 / 25'), findsOneWidget);
@@ -1177,6 +1280,28 @@ class _CountingRepository extends FakeDoubanRepository {
   }) {
     interestsCalls++;
     return super.fetchInterests(userId, type, status, start: start, count: count);
+  }
+}
+
+/// Step 3: a repository whose topic never resolves, so the
+/// skeleton stays on screen.
+class _NeverTopicRepo extends FakeDoubanRepository {
+  @override
+  Future<TopicDetail> fetchTopic(String topicId) => Completer<TopicDetail>().future;
+}
+
+/// Step 3: a repository whose first topic fetch fails, then
+/// succeeds, so the retry button can be exercised.
+class _FlakyTopicRepo extends FakeDoubanRepository {
+  var _failed = false;
+
+  @override
+  Future<TopicDetail> fetchTopic(String topicId) async {
+    if (!_failed) {
+      _failed = true;
+      throw StateError('boom');
+    }
+    return super.fetchTopic(topicId);
   }
 }
 

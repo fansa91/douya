@@ -204,6 +204,40 @@ void main() {
     });
   });
 
+  group('parseContentBlocks', () {
+    test('keeps paragraph/image order and link runs', () {
+      final blocks = parseContentBlocks(
+        '<p>第一段<a href="https://example.com">链接</a>尾巴</p><img src="https://img.example/a.jpg"><p>第二段</p>',
+      );
+      expect(blocks.length, 3);
+      expect(blocks[0].isImage, isFalse);
+      expect(blocks[0].runs.length, 3);
+      expect(blocks[0].runs[0].text, '第一段');
+      expect(blocks[0].runs[1].text, '链接');
+      expect(blocks[0].runs[1].link, 'https://example.com');
+      expect(blocks[0].runs[2].text, '尾巴');
+      expect(blocks[1].isImage, isTrue);
+      expect(blocks[1].imageUrl, 'https://img.example/a.jpg');
+      expect(blocks[2].runs.first.text, '第二段');
+    });
+
+    test('lifts an image nested inside a paragraph into its own block', () {
+      final blocks = parseContentBlocks('<p>前<img src="https://img.example/b.jpg">后</p>');
+      expect(blocks.length, 3);
+      expect(blocks[0].runs.first.text, '前');
+      expect(blocks[1].imageUrl, 'https://img.example/b.jpg');
+      expect(blocks[2].runs.first.text, '后');
+    });
+
+    test('bare text and br become a paragraph; empty blocks are dropped', () {
+      final blocks = parseContentBlocks('裸文本<br>第二行<p>   </p>');
+      expect(blocks.length, 1);
+      expect(blocks.first.runs.first.text, '裸文本\n第二行');
+      expect(parseContentBlocks(''), isEmpty);
+      expect(parseContentBlocks('<p></p>'), isEmpty);
+    });
+  });
+
   group('other models', () {
     test('RankBoard reads the subject_collection object', () {
       final board = RankBoard.fromJson(<String, dynamic>{

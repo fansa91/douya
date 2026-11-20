@@ -16,6 +16,9 @@ void main() {
     for (final g in List.of(lists.favoriteGroups)) {
       await lists.toggleFavoriteGroup(id: g.id, name: g.name);
     }
+    for (final t in List.of(lists.favoriteTopics)) {
+      await lists.toggleFavoriteTopic(id: t.id, title: t.title);
+    }
     await lists.setMyUserId(null);
     await lists.clearRecentUsers();
   });
@@ -34,6 +37,24 @@ void main() {
     await lists.toggleFavoriteGroup(id: '146409', name: '上海租房');
     expect(lists.isFavoriteGroup('146409'), isFalse);
     expect(lists.favoriteGroups, isEmpty);
+  });
+
+  test('toggle favorite topic adds, then removes', () async {
+    await lists.toggleFavoriteTopic(id: '504122375', title: '8号线杨思民用水电 押一付一');
+    expect(lists.isFavoriteTopic('504122375'), isTrue);
+    expect(lists.favoriteTopics.first.title, '8号线杨思民用水电 押一付一');
+    await lists.toggleFavoriteTopic(id: '504122375', title: '8号线杨思民用水电 押一付一');
+    expect(lists.isFavoriteTopic('504122375'), isFalse);
+    expect(lists.favoriteTopics, isEmpty);
+  });
+
+  test('favorite topics are newest-first and capped at 30', () async {
+    for (var i = 0; i < 31; i++) {
+      await lists.toggleFavoriteTopic(id: 't$i', title: '话题$i');
+    }
+    expect(lists.favoriteTopics.length, 30);
+    expect(lists.favoriteTopics.first.id, 't30');
+    expect(lists.isFavoriteTopic('t0'), isFalse);
   });
 
   test('favorites are newest-first and capped at 30', () async {

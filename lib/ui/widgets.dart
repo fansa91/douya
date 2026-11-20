@@ -414,6 +414,59 @@ class LoadingList extends StatelessWidget {
   }
 }
 
+/// One grey placeholder bar for skeleton screens. Uses the
+/// surface container color, so it adapts to light and dark mode.
+class SkeletonBar extends StatelessWidget {
+  const SkeletonBar({super.key, this.width, this.height = 14});
+
+  final double? width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+}
+
+/// Skeleton for the topic detail page: title, author row, and a
+/// few body lines, in place of the first-load spinner.
+class TopicDetailSkeleton extends StatelessWidget {
+  const TopicDetailSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: const [
+        SkeletonBar(width: 260, height: 24),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            SkeletonBar(width: 32, height: 32),
+            SizedBox(width: 8),
+            SkeletonBar(width: 180),
+          ],
+        ),
+        SizedBox(height: 20),
+        SkeletonBar(),
+        SizedBox(height: 8),
+        SkeletonBar(),
+        SizedBox(height: 8),
+        SkeletonBar(width: 220),
+        SizedBox(height: 20),
+        SkeletonBar(height: 180),
+      ],
+    );
+  }
+}
+
 /// Centers a page's content at a readable width on desktop
 /// (c001apk's reading pane centers detail at ~680-760; this uses
 /// 720 for text lists). On narrow screens the cap is wider than

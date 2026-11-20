@@ -768,6 +768,7 @@ class RealDoubanRepository implements DoubanRepository {
     return TopicCommentsResult(
       comments: _parseList(data['comments'], TopicComment.fromJson),
       total: (data['total'] as num?)?.toInt() ?? 0,
+      popularComments: _parseList(data['popular_comments'], TopicComment.fromJson),
     );
   }
 
@@ -803,10 +804,16 @@ class RealDoubanRepository implements DoubanRepository {
     return TopicDetail(
       topic: GroupTopic.fromJson(detail),
       // Topic content arrives as HTML; shown raw it leaks literal
-      // tags into the detail page (reported 2026-10-31).
+      // tags into the detail page (reported 2026-10-31). The raw
+      // HTML is kept for the block parser (paragraphs and images
+      // in original order); `content` is the plain-text fallback.
       content: htmlToPlainText(rawContent),
+      contentHtml: rawContent,
       comments: commentsPage.comments,
       commentsTotal: commentsPage.total,
+      popularComments: commentsPage.popularComments,
+      sharingUrl: (detail['sharing_url'] as String?) ?? '',
+      ipLocation: detail['ip_location'] as String?,
       groupId: '${group?['id'] ?? ''}',
       groupName: (group?['name'] as String?) ?? '',
       photos: photos,

@@ -26,6 +26,24 @@ class FavoriteGroup {
       );
 }
 
+/// A locally saved topic (id / title) for the detail page's star.
+/// Same store as favorite groups; there is no "saved topics" list
+/// page yet — the star is a bookmark the feed's local signals can
+/// use later.
+class FavoriteTopic {
+  const FavoriteTopic({required this.id, required this.title});
+
+  final String id;
+  final String title;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title};
+
+  factory FavoriteTopic.fromJson(Map<String, dynamic> json) => FavoriteTopic(
+        id: '${json['id'] ?? ''}',
+        title: (json['title'] as String?) ?? '',
+      );
+}
+
 /// A recently viewed user (id / name / avatar) for the bind guide.
 class RecentUser {
   const RecentUser({required this.id, required this.name, this.avatar});
@@ -57,13 +75,16 @@ class LocalLists extends ChangeNotifier {
   static final LocalLists instance = LocalLists._();
 
   static const _favoriteGroupsKey = 'favorite_groups';
+  static const _favoriteTopicsKey = 'favorite_topics';
   static const _myUserIdKey = 'my_user_id';
   static const _recentUsersKey = 'recent_users';
 
   static const maxFavoriteGroups = 30;
+  static const maxFavoriteTopics = 30;
   static const maxRecentUsers = 10;
 
   List<FavoriteGroup> favoriteGroups = [];
+  List<FavoriteTopic> favoriteTopics = [];
   String? myUserId;
   List<RecentUser> recentUsers = [];
 
@@ -71,11 +92,17 @@ class LocalLists extends ChangeNotifier {
 
   bool isFavoriteGroup(String id) => favoriteGroups.any((g) => g.id == id);
 
+  bool isFavoriteTopic(String id) => favoriteTopics.any((t) => t.id == id);
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     favoriteGroups = _decodeList(
       prefs.getString(_favoriteGroupsKey),
       FavoriteGroup.fromJson,
+    );
+    favoriteTopics = _decodeList(
+      prefs.getString(_favoriteTopicsKey),
+      FavoriteTopic.fromJson,
     );
     myUserId = prefs.getString(_myUserIdKey);
     recentUsers = _decodeList(
@@ -106,6 +133,26 @@ class LocalLists extends ChangeNotifier {
     await prefs.setString(
       _favoriteGroupsKey,
       jsonEncode(favoriteGroups.map((g) => g.toJson()).toList()),
+    );
+  }
+
+  Future<void> toggleFavoriteTopic({required String id, required String title}) async {
+    if (isFavoriteTopic(id)) {
+      favoriteTopics = favoriteTopics.where((t) => t.id != id).toList();
+    } else {
+      favoriteTopics = [
+        FavoriteTopic(id: id, title: title),
+        ...favoriteTopics,
+      ];
+      if (favoriteTopics.length > maxFavoriteTopics) {
+        favoriteTopics = favoriteTopics.sublist(0, maxFavoriteTopics);
+      }
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _favoriteTopicsKey,
+      jsonEncode(favoriteTopics.map((t) => t.toJson()).toList()),
     );
   }
 
