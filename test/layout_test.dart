@@ -349,6 +349,37 @@ void main() {
     expect(repository.topicCalls, 2);
     expect(tester.takeException(), isNull);
   });
+
+  // Task 2 (new plan): switching tabs keeps the page's state —
+  // no re-fetch, and the same State object survives the round trip.
+  testWidgets('switching tabs keeps browse state', (tester) async {
+    final repository = _CountingRepository();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdaptiveScaffold(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('书影音'));
+    await tester.pumpAndSettle();
+    expect(repository.homeSectionsCalls, 1);
+    final stateBefore =
+        tester.state<State>(find.byType(BrowsePage, skipOffstage: false));
+    await tester.tap(find.text('小组'));
+    await tester.pumpAndSettle();
+    expect(repository.hotGroupsCalls, 1);
+    await tester.tap(find.text('书影音'));
+    await tester.pumpAndSettle();
+    expect(repository.homeSectionsCalls, 1);
+    final stateAfter =
+        tester.state<State>(find.byType(BrowsePage, skipOffstage: false));
+    expect(identical(stateBefore, stateAfter), isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Counts how often the two refetch-prone calls run, so the task-1
@@ -357,6 +388,7 @@ void main() {
 class _CountingRepository extends FakeDoubanRepository {
   int homeSectionsCalls = 0;
   int topicCalls = 0;
+  int hotGroupsCalls = 0;
 
   @override
   Future<List<HomeSection>> fetchHomeSections() {
@@ -368,6 +400,12 @@ class _CountingRepository extends FakeDoubanRepository {
   Future<TopicDetail> fetchTopic(String topicId) {
     topicCalls++;
     return super.fetchTopic(topicId);
+  }
+
+  @override
+  Future<List<SearchGroup>> fetchHotGroups() {
+    hotGroupsCalls++;
+    return super.fetchHotGroups();
   }
 }
 

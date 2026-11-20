@@ -95,6 +95,23 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
     }
   }
 
+  /// One page per tab, created on first visit and kept alive: the
+  /// old `_pageFor(_index)` rebuilt the page on every tab switch,
+  /// losing scroll position and all loaded content. Note the pages
+  /// still rebuild when the width crosses 600 (the mobile Scaffold
+  /// and the desktop Row are different subtrees); keeping state
+  /// across that would need a KeyedSubtree with a GlobalKey, which
+  /// the plan marks optional and is not done here.
+  final List<Widget?> _pages = List.filled(5, null);
+
+  Widget _body() {
+    _pages[_index] ??= _pageFor(_index);
+    return IndexedStack(
+      index: _index,
+      children: [for (final p in _pages) p ?? const SizedBox.shrink()],
+    );
+  }
+
   void _openSearch() {
     openSearchPage(widget.repository);
   }
@@ -110,7 +127,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = Breakpoints.of(constraints.maxWidth) == WindowSize.compact;
-        final body = _pageFor(_index);
+        final body = _body();
         if (isMobile) {
           return Scaffold(
             appBar: AppBar(
