@@ -1,3 +1,4 @@
+import 'breakpoints.dart';
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -243,7 +244,7 @@ class LoadingList extends StatelessWidget {
 /// 720 for text lists). On narrow screens the cap is wider than
 /// the viewport, so mobile layouts are unaffected.
 class CenteredWidth extends StatelessWidget {
-  const CenteredWidth({super.key, required this.child, this.maxWidth = 720});
+  const CenteredWidth({super.key, required this.child, this.maxWidth = Breakpoints.textMaxWidth});
 
   final Widget child;
   final double maxWidth;
@@ -282,8 +283,8 @@ const kHorizontalDragDevices = <PointerDeviceKind>{
 /// scrolling here: a plain wheel scrolls the page vertically, and
 /// Shift+wheel already scrolls horizontal rows (the framework flips
 /// axes while Shift is held), so converting it would scroll both the
-/// row and the page at once. The 600 threshold matches the shell's
-/// mobile/desktop split; task 1 will centralize it in Breakpoints.
+/// row and the page at once. The desktop threshold is
+/// Breakpoints.medium (600), the shell's mobile/desktop split.
 class HScrollRow extends StatefulWidget {
   const HScrollRow({super.key, required this.children, this.spacing = 8});
 
@@ -359,7 +360,7 @@ class _HScrollRowState extends State<HScrollRow> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= 600;
+        final isDesktop = Breakpoints.of(constraints.maxWidth) != WindowSize.compact;
         final row = ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(
             dragDevices: kHorizontalDragDevices,

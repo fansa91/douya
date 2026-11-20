@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'subject_page.dart';
@@ -118,7 +119,7 @@ class _UserPageState extends State<UserPage> {
                   ? const EmptyState(message: '该用户没有公开收藏（total 为 0 是合法结果，不是接口坏了）。')
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        if (constraints.maxWidth < 600) {
+                        if (Breakpoints.of(constraints.maxWidth) == WindowSize.compact) {
                           return ListView.builder(
                             itemCount: _interests.length,
                             itemBuilder: (_, i) {
@@ -145,10 +146,10 @@ class _UserPageState extends State<UserPage> {
                         }
                         // Same poster-grid rule as Browse: row capped
                         // at 1440, columns from a ~240 poster width.
-                        final contentWidth = constraints.maxWidth > 1440 ? 1440.0 : constraints.maxWidth;
-                        final columns = ((contentWidth - 48) / 240).floor().clamp(2, 5);
+                        final contentWidth = constraints.maxWidth > Breakpoints.gridMaxWidth ? Breakpoints.gridMaxWidth : constraints.maxWidth;
+                        final columns = Breakpoints.posterColumns(contentWidth);
                         return CenteredWidth(
-                          maxWidth: 1440,
+                          maxWidth: Breakpoints.gridMaxWidth,
                           child: GridView.builder(
                             padding: const EdgeInsets.all(24),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

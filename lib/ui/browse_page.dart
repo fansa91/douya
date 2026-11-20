@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'faceted_view.dart';
@@ -35,7 +36,7 @@ class _RecommendSections extends StatelessWidget {
         final sections = snapshot.data ?? const [];
         if (sections.isEmpty) return const EmptyState(message: '暂无推荐内容');
         return CenteredWidth(
-          maxWidth: 1440,
+          maxWidth: Breakpoints.gridMaxWidth,
           child: ListView(
             padding: const EdgeInsets.all(16),
           children: [
@@ -287,21 +288,21 @@ class _BrowsePageState extends State<BrowsePage> {
                           ? const EmptyState(message: '该分类暂无内容')
                           : LayoutBuilder(
                           builder: (context, constraints) {
-                            final isGrid = constraints.maxWidth >= 600;
+                            final isGrid = Breakpoints.of(constraints.maxWidth) != WindowSize.compact;
                             // Desktop poster grid: cap the row at 1440 and
                             // derive the column count from a ~240 poster
                             // width (c001apk's card columns derive from a
                             // fixed card width the same way), instead of
                             // stretching 4-5 posters across any window.
-                            final contentWidth = constraints.maxWidth > 1440 ? 1440.0 : constraints.maxWidth;
-                            final columns = ((contentWidth - 48) / 240).floor().clamp(2, 5);
+                            final contentWidth = constraints.maxWidth > Breakpoints.gridMaxWidth ? Breakpoints.gridMaxWidth : constraints.maxWidth;
+                            final columns = Breakpoints.posterColumns(contentWidth);
                             final footer = LoadMoreFooter(
                               countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
                               canLoadMore: () => !_loadingMore && hasMore,
                               onLoadMore: _loadMore,
                             );
                             return CenteredWidth(
-                              maxWidth: 1440,
+                              maxWidth: Breakpoints.gridMaxWidth,
                               child: isGrid
                                   ? CustomScrollView(
                                       slivers: [

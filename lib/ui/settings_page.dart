@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/image_cache.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
@@ -68,7 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
       appBar: AppBar(title: const Text('设置')),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 600;
+          final wide = Breakpoints.of(constraints.maxWidth) != WindowSize.compact;
           if (!wide) return _categories(false);
           return Row(
             children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import 'browse_page.dart';
 import 'group_page.dart';
@@ -77,7 +78,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 600;
+        final isMobile = Breakpoints.of(constraints.maxWidth) == WindowSize.compact;
         final body = _pageFor(_index);
         if (isMobile) {
           return Scaffold(
@@ -99,7 +100,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
             ),
           );
         }
-        final extended = constraints.maxWidth >= 1024;
+        final extended = constraints.maxWidth >= Breakpoints.extendedRail;
         return Scaffold(
           body: Row(
             children: [

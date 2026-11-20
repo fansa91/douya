@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'group_page.dart';
@@ -38,7 +39,7 @@ class HomePage extends StatelessWidget {
     // count from a fixed card width, shortest-column placement.
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 600) {
+        if (Breakpoints.of(constraints.maxWidth) == WindowSize.compact) {
           return CenteredWidth(
             child: _FeedList(repository: repository, refreshListenable: refreshListenable),
           );

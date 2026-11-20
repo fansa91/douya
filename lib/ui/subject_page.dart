@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
@@ -134,7 +135,7 @@ class SubjectPage extends StatelessWidget {
           if (detail == null) return const EmptyState(message: '暂无详情');
           return LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 1024) return _MobileDetail(detail: detail, repository: repository);
+              if (constraints.maxWidth < Breakpoints.extendedRail) return _MobileDetail(detail: detail, repository: repository);
               return _DesktopDetail(detail: detail, repository: repository);
             },
           );

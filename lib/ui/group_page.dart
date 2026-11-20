@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'image_preview_page.dart';
@@ -438,7 +439,7 @@ class _GroupPageState extends State<GroupPage> {
                       ? const EmptyState(message: '该小组暂无话题')
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            if (constraints.maxWidth < 1024) {
+                            if (constraints.maxWidth < Breakpoints.extendedRail) {
                               return _topicList(isDesktop: false);
                             }
                             final selected = _selectedTopicId ?? _topics.first.id;
@@ -520,7 +521,7 @@ class TopicDetailView extends StatelessWidget {
         // the single top-to-bottom column.
         return LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 720) {
+            if (constraints.maxWidth < Breakpoints.textMaxWidth) {
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -539,7 +540,7 @@ class TopicDetailView extends StatelessWidget {
             // The split itself is capped at 1440 so neither column
             // stretches across an ultrawide window.
             return CenteredWidth(
-              maxWidth: 1440,
+              maxWidth: Breakpoints.gridMaxWidth,
               child: Row(
                 children: [
                   Expanded(

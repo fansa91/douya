@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'subject_page.dart';
@@ -202,7 +203,7 @@ class _FacetedViewState extends State<FacetedView> {
         // the window, because the shell rail takes 72/240 off it.
         LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 600;
+            final compact = Breakpoints.of(constraints.maxWidth) == WindowSize.compact;
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Column(
