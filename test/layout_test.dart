@@ -13,6 +13,7 @@ import 'package:douya/ui/adaptive_scaffold.dart';
 import 'package:douya/ui/browse_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/settings_page.dart';
+import 'package:douya/ui/topic_detail_view.dart';
 import 'package:douya/ui/subject_page.dart';
 import 'package:douya/ui/user_page.dart';
 import 'package:douya/ui/widgets.dart';

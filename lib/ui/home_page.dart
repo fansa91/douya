@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
-import 'group_page.dart';
+import 'topic_detail_view.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
