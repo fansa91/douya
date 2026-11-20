@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
+import 'group_header.dart';
 import 'topic_detail_view.dart';
 import 'widgets.dart';
 
@@ -48,7 +49,6 @@ class _GroupPageState extends State<GroupPage> {
   /// the header then falls back to the group id and topics still load.
   SearchGroup? _groupDetail;
   bool _groupDetailLoading = false;
-  bool _descExpanded = false;
 
   @override
   void initState() {
@@ -100,7 +100,6 @@ class _GroupPageState extends State<GroupPage> {
     setState(() {
       _groupDetail = null;
       _groupDetailLoading = true;
-      _descExpanded = false;
     });
     try {
       final group = await widget.repository.fetchGroupDetail(groupId);
@@ -343,72 +342,11 @@ class _GroupPageState extends State<GroupPage> {
     );
   }
 
-  /// Detail-page header: group avatar, name, member count and
-  /// description. The id input used to sit here; it now lives only
-  /// on the hot-groups view, and this view is reached from it (or
-  /// from a topic's group row). Long descriptions collapse to two
-  /// lines with an expand toggle.
   Widget _groupHeader() {
-    final group = _groupDetail;
-    if (_groupDetailLoading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: LinearProgressIndicator(),
-      );
-    }
-    if (group == null) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: Text('小组 ${_selectedGroupId ?? _groupId}', style: const TextStyle(fontWeight: FontWeight.bold)),
-      );
-    }
-    final avatarUrl = group.largeAvatar ?? group.avatar;
-    final description = group.description;
-    final collapsible = description.length > 80;
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(26),
-              child: avatarUrl == null || avatarUrl.isEmpty
-                  ? const SizedBox(width: 52, height: 52, child: Icon(Icons.group_outlined))
-                  : CachedNetworkImage(imageUrl: avatarUrl, httpHeaders: doubanImageHeaders, width: 52, height: 52, fit: BoxFit.cover, errorWidget: (context, url, error) => const Icon(Icons.group_outlined)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('${group.memberCount} 个成员', style: Theme.of(context).textTheme.bodySmall),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      maxLines: _descExpanded ? null : 2,
-                      overflow: _descExpanded ? null : TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (collapsible)
-                      InkWell(
-                        onTap: () => setState(() => _descExpanded = !_descExpanded),
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(_descExpanded ? '收起' : '展开', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-                        ),
-                      ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return GroupHeader(
+      detail: _groupDetail,
+      loading: _groupDetailLoading,
+      groupId: _selectedGroupId ?? _groupId,
     );
   }
 
