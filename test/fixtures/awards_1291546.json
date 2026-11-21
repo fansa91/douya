@@ -1,0 +1,75 @@
+{
+ "start": 0,
+ "count": 20,
+ "total": 15,
+ "awards": [
+  {
+   "ceremony": {
+    "id": "45472",
+    "title": "第66届奥斯卡金像奖",
+    "number": 66,
+    "year": 1994
+   },
+   "categories": [
+    {
+     "category": {
+      "title": "最佳外语片"
+     },
+     "is_won": false,
+     "celebrities": [
+      {
+       "id": "1023040",
+       "name": "陈凯歌"
+      }
+     ]
+    },
+    {
+     "category": {
+      "title": "最佳摄影"
+     },
+     "is_won": false,
+     "celebrities": [
+      {
+       "id": "1037747",
+       "name": "顾长卫"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "ceremony": {
+    "id": "41263",
+    "title": "第46届戛纳电影节",
+    "number": 46,
+    "year": 1993
+   },
+   "categories": [
+    {
+     "category": {
+      "title": "主竞赛单元 金棕榈奖"
+     },
+     "is_won": true,
+     "celebrities": [
+      {
+       "id": "1023040",
+       "name": "陈凯歌"
+      }
+     ]
+    },
+    {
+     "category": {
+      "title": "费比西奖"
+     },
+     "is_won": true,
+     "celebrities": [
+      {
+       "id": "1023040",
+       "name": "陈凯歌"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

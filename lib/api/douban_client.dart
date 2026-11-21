@@ -585,6 +585,58 @@ class RealDoubanRepository implements DoubanRepository {
     );
   }
 
+  /// Parses the Frodo /{type}/{id}/rating response. Lenient: a
+  /// missing or misshaped response yields empty stats, never a
+  /// throw. Fixture: rating_stats_1292052.json (real response,
+  /// 2026-11-21; stats sums to 1.0).
+  static RatingStats parseRatingStats(dynamic data) {
+    if (data is! Map<String, dynamic>) return const RatingStats();
+    return RatingStats.fromJson(data);
+  }
+
+  /// Parses the Frodo /{type}/{id}/awards response ({start, count,
+  /// total, awards}). Lenient: a missing or misshaped response
+  /// yields an empty result, never a throw. Fixture:
+  /// awards_1291546.json (real response, total 15, 2026-11-21).
+  static AwardsResult parseAwards(dynamic data) {
+    if (data is! Map<String, dynamic>) return const AwardsResult();
+    return AwardsResult(
+      awards: _parseList(data['awards'], Award.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Parses the Frodo /celebrity/{id}/photos response ({start,
+  /// count, total, uri, photos}). Lenient: a missing or misshaped
+  /// response yields an empty result, never a throw. Fixture:
+  /// celebrity_photos_1054521.json (real response, total 120,
+  /// 2026-11-21).
+  static CelebrityPhotosResult parseCelebrityPhotos(dynamic data) {
+    if (data is! Map<String, dynamic>) return const CelebrityPhotosResult();
+    return CelebrityPhotosResult(
+      photos: _parseList(data['photos'], CelebrityPhoto.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<RatingStats> fetchRatingStats(String type, String id) async {
+    final data = await _client.signedGet('/api/v2/$type/$id/rating', {});
+    return parseRatingStats(data);
+  }
+
+  @override
+  Future<AwardsResult> fetchAwards(String type, String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet('/api/v2/$type/$id/awards', {'start': start, 'count': count});
+    return parseAwards(data);
+  }
+
+  @override
+  Future<CelebrityPhotosResult> fetchCelebrityPhotos(String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet('/api/v2/celebrity/$id/photos', {'start': start, 'count': count});
+    return parseCelebrityPhotos(data);
+  }
+
   @override
   Future<BrowseResult> fetchMovieShowing({
     String? sort,

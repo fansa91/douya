@@ -1049,6 +1049,167 @@ class CelebrityWorksResult {
   final int total;
 }
 
+/// Five-tier rating distribution from /{type}/{id}/rating
+/// (Frodo, guest 200, verified 2026-11-21 on movie 1292052).
+/// `stats` is five fractions in 1-to-5-star order and sums to 1
+/// (for a 9.7 film the last entry, 5 stars, is ~0.85); `rank` in a
+/// TypeRank is the fraction of that type this subject beats
+/// (0.99 = better than 99% of crime films).
+class TypeRank {
+  const TypeRank({required this.type, required this.rank});
+
+  final String type;
+  final double rank;
+}
+
+class RatingStats {
+  const RatingStats({
+    this.stats = const [],
+    this.doneCount = 0,
+    this.doingCount = 0,
+    this.wishCount = 0,
+    this.typeRanks = const [],
+  });
+
+  final List<double> stats;
+  final int doneCount;
+  final int doingCount;
+  final int wishCount;
+  final List<TypeRank> typeRanks;
+
+  factory RatingStats.fromJson(Map<String, dynamic> json) {
+    final rawStats = json['stats'];
+    final stats = <double>[];
+    if (rawStats is List) {
+      for (final v in rawStats) {
+        if (v is num) stats.add(v.toDouble());
+      }
+    }
+    final rawRanks = json['type_ranks'];
+    final ranks = <TypeRank>[];
+    if (rawRanks is List) {
+      for (final r in rawRanks) {
+        if (r is Map) {
+          ranks.add(TypeRank(
+            type: (r['type'] as String?) ?? '',
+            rank: (r['rank'] as num?)?.toDouble() ?? 0,
+          ));
+        }
+      }
+    }
+    return RatingStats(
+      stats: stats,
+      doneCount: (json['done_count'] as num?)?.toInt() ?? 0,
+      doingCount: (json['doing_count'] as num?)?.toInt() ?? 0,
+      wishCount: (json['wish_count'] as num?)?.toInt() ?? 0,
+      typeRanks: ranks,
+    );
+  }
+}
+
+/// One award entry from /{type}/{id}/awards (Frodo, guest 200,
+/// verified 2026-11-21 on movie 1291546, total 15): one ceremony
+/// with its categories. `isWon` marks a win; a nomination is a
+/// category with isWon false. Fixture: awards_1291546.json.
+class AwardCategory {
+  const AwardCategory({required this.title, this.isWon = false, this.celebrityNames = const []});
+
+  final String title;
+  final bool isWon;
+  final List<String> celebrityNames;
+}
+
+class Award {
+  const Award({
+    required this.ceremonyId,
+    required this.ceremonyTitle,
+    this.ceremonyNumber,
+    this.ceremonyYear,
+    this.categories = const [],
+  });
+
+  final String ceremonyId;
+  final String ceremonyTitle;
+  final int? ceremonyNumber;
+  final int? ceremonyYear;
+  final List<AwardCategory> categories;
+
+  factory Award.fromJson(Map<String, dynamic> json) {
+    final ceremony = json['ceremony'];
+    final ceremonyMap = ceremony is Map ? ceremony.cast<String, dynamic>() : const <String, dynamic>{};
+    final rawCats = json['categories'];
+    final categories = <AwardCategory>[];
+    if (rawCats is List) {
+      for (final c in rawCats) {
+        if (c is! Map) continue;
+        final cat = c['category'];
+        final catMap = cat is Map ? cat.cast<String, dynamic>() : const <String, dynamic>{};
+        final rawCelebs = c['celebrities'];
+        final names = <String>[];
+        if (rawCelebs is List) {
+          for (final p in rawCelebs) {
+            if (p is Map && p['name'] != null) names.add('${p['name']}');
+          }
+        }
+        categories.add(AwardCategory(
+          title: (catMap['title'] as String?) ?? '',
+          isWon: c['is_won'] == true,
+          celebrityNames: names,
+        ));
+      }
+    }
+    return Award(
+      ceremonyId: '${ceremonyMap['id'] ?? ''}',
+      ceremonyTitle: (ceremonyMap['title'] as String?) ?? '',
+      ceremonyNumber: (ceremonyMap['number'] as num?)?.toInt(),
+      ceremonyYear: (ceremonyMap['year'] as num?)?.toInt(),
+      categories: categories,
+    );
+  }
+}
+
+class AwardsResult {
+  const AwardsResult({this.awards = const [], this.total = 0});
+
+  final List<Award> awards;
+  final int total;
+}
+
+/// One photo from /celebrity/{id}/photos (Frodo, guest 200,
+/// verified 2026-11-21, total 120). The image is a size object;
+/// `imageUrl` resolves large first, then normal. Fixture:
+/// celebrity_photos_1054521.json.
+class CelebrityPhoto {
+  const CelebrityPhoto({required this.id, this.imageUrl, this.description = '', this.authorName = ''});
+
+  final String id;
+  final String? imageUrl;
+  final String description;
+  final String authorName;
+
+  factory CelebrityPhoto.fromJson(Map<String, dynamic> json) {
+    final author = json['author'];
+    final authorMap = author is Map ? author.cast<String, dynamic>() : const <String, dynamic>{};
+    // image is {large, normal} size objects, not a plain url:
+    // resolve large first, then normal (same as Subject.pic).
+    final image = json['image'];
+    final imageMap = image is Map ? image.cast<String, dynamic>() : const <String, dynamic>{};
+    return CelebrityPhoto(
+      id: '${json['id'] ?? ''}',
+      imageUrl: imageUrlOf(imageMap['large']) ?? imageUrlOf(imageMap['normal']),
+      description: (json['description'] as String?) ?? '',
+      authorName: (authorMap['name'] as String?) ?? '',
+    );
+  }
+}
+
+class CelebrityPhotosResult {
+  const CelebrityPhotosResult({this.photos = const [], this.total = 0});
+
+  final List<CelebrityPhoto> photos;
+  final int total;
+}
+
 class CelebrityDetail {
   const CelebrityDetail({
     required this.celebrity,

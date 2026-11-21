@@ -507,4 +507,38 @@ Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int 
   final page = start < total ? _fakeCelebrityWorks.sublist(start, (start + count).clamp(0, total)) : const <CelebrityWork>[];
   return CelebrityWorksResult(works: page, total: total);
 }
+
+@override
+Future<RatingStats> fetchRatingStats(String type, String id) async =>
+    const RatingStats(
+      stats: [0.01, 0.02, 0.12, 0.30, 0.55],
+      doneCount: 1000,
+      doingCount: 10,
+      wishCount: 500,
+      typeRanks: [TypeRank(type: '剧情片', rank: 0.95)],
+    );
+
+@override
+Future<AwardsResult> fetchAwards(String type, String id, {int start = 0, int count = 20}) async =>
+    const AwardsResult(
+      awards: [
+        Award(
+          ceremonyId: '1',
+          ceremonyTitle: '示例电影节',
+          ceremonyNumber: 1,
+          ceremonyYear: 2026,
+          categories: [AwardCategory(title: '最佳影片', isWon: true, celebrityNames: ['示例影人'])],
+        ),
+      ],
+      total: 1,
+    );
+
+@override
+Future<CelebrityPhotosResult> fetchCelebrityPhotos(String id, {int start = 0, int count = 20}) async =>
+    const CelebrityPhotosResult(
+      photos: [
+        CelebrityPhoto(id: '1', imageUrl: 'https://example.com/photo1.jpg', description: '示例剧照', authorName: '示例用户'),
+      ],
+      total: 1,
+    );
 }

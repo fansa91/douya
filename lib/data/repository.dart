@@ -201,4 +201,17 @@ abstract class DoubanRepository {
   /// start/count; total 113 for the probed case). The detail's
   /// first page comes from fetchCelebrity.
   Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int count = 20});
+
+  /// Five-tier rating distribution for a subject (Frodo
+  /// /{type}/{id}/rating, guest 200, verified 2026-11-21).
+  Future<RatingStats> fetchRatingStats(String type, String id);
+
+  /// Awards for a subject (Frodo /{type}/{id}/awards, guest 200,
+  /// verified 2026-11-21; total 15 for movie 1291546, total 0 for
+  /// 1292052 — an empty result is normal, hide the section).
+  Future<AwardsResult> fetchAwards(String type, String id, {int start = 0, int count = 20});
+
+  /// Photos for a celebrity (Frodo /celebrity/{id}/photos, guest
+  /// 200, verified 2026-11-21; total 120 for 1054521).
+  Future<CelebrityPhotosResult> fetchCelebrityPhotos(String id, {int start = 0, int count = 20});
 }
