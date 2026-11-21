@@ -1385,6 +1385,14 @@ class GroupTopic {
   }
 }
 
+/// An id field that is a string in the API but may arrive as a
+/// number: stringify it, empty or absent means null.
+String? _stringId(dynamic value) {
+  if (value is String && value.isNotEmpty) return value;
+  if (value is num) return '$value';
+  return null;
+}
+
 class TopicComment {
   const TopicComment({
     required this.authorName,
@@ -1395,6 +1403,8 @@ class TopicComment {
     this.authorId = '',
     this.ipLocation,
     this.refComment,
+    this.id,
+    this.refCommentId,
   });
 
   final String authorName;
@@ -1415,6 +1425,19 @@ class TopicComment {
   /// The quoted reply (ref_comment), one level only: a reply quotes
   /// the comment it answers. Null for top-level comments.
   final TopicComment? refComment;
+
+  /// Comment id (id, a string in the API, verified 2026-11-21).
+  /// Null when the API omits it; a comment without an id cannot be
+  /// referenced, so it can only be a root or a child, never a
+  /// parent, in a thread.
+  final String? id;
+
+  /// The id of the comment this one answers (ref_comment.id).
+  /// Null for top-level comments, and null when the ref carries no
+  /// id. The thread builder resolves it against the loaded list;
+  /// an id that is not loaded (parent deleted, or not yet loaded)
+  /// makes this comment a root.
+  final String? refCommentId;
 
   factory TopicComment.fromJson(Map<String, dynamic> json, {bool includeRef = true}) {
     final author = json['author'];
@@ -1437,6 +1460,8 @@ class TopicComment {
       refComment: includeRef && ref is Map<String, dynamic>
           ? TopicComment.fromJson(ref, includeRef: false)
           : null,
+      id: _stringId(json['id']),
+      refCommentId: ref is Map<String, dynamic> ? _stringId(ref['id']) : null,
     );
   }
 }
