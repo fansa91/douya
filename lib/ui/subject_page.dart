@@ -145,7 +145,7 @@ class SubjectPage extends StatelessWidget {
   }
 }
 
-Widget _header(SubjectDetail detail) {
+Widget _header(SubjectDetail detail, DoubanRepository repository) {
   final s = detail.subject;
   // Display follows the image-quality setting; the preview opened
   // on tap always uses the parsed (large-first) URL.
@@ -189,12 +189,184 @@ Widget _header(SubjectDetail detail) {
               if (_episodesText(detail) != null) Text(_episodesText(detail)!),
               const SizedBox(height: 12),
               if (s.rating != null) RatingText(rating: s.rating!),
+              if (s.rating != null) ...[
+                const SizedBox(height: 8),
+                _RatingBars(repository: repository, type: s.type, id: s.id),
+              ],
             ],
           ),
         ),
       ],
     ),
   );
+}
+
+/// Rating distribution: five star-tier bars beside the rating.
+/// Fetched once from /{type}/{id}/rating (stats are 5 fractions
+/// in 1→5-star order, verified 2026-11-21). On narrow screens the
+/// bars start collapsed (a "评分分布" row, tap to expand); on wide
+/// screens they show directly. Hidden entirely when the endpoint
+/// returns no stats.
+class _RatingBars extends StatefulWidget {
+  const _RatingBars({required this.repository, required this.type, required this.id});
+
+  final DoubanRepository repository;
+  final String type;
+  final String id;
+
+  @override
+  State<_RatingBars> createState() => _RatingBarsState();
+}
+
+class _RatingBarsState extends State<_RatingBars> {
+  late final Future<RatingStats> _future =
+      widget.repository.fetchRatingStats(widget.type, widget.id);
+
+  /// Null = follow the width (wide: expanded, narrow: collapsed);
+  /// tapping pins the choice.
+  bool? _expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<RatingStats>(
+      future: _future,
+      builder: (context, snapshot) {
+        final stats = snapshot.data;
+        if (stats == null || stats.stats.length != 5) return const SizedBox.shrink();
+        return LayoutBuilder(builder: (context, c) {
+          final compact = c.maxWidth < 400;
+          final expanded = _expanded ?? !compact;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !expanded),
+              child: Row(children: [
+                const Text('评分分布', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Text('五星 ${(stats.stats[4] * 100).toStringAsFixed(0)}%',
+                    style: Theme.of(context).textTheme.bodySmall),
+                Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 18),
+              ]),
+            ),
+            if (expanded) ...[
+              const SizedBox(height: 6),
+              for (var star = 5; star >= 1; star--)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    SizedBox(width: 28, child: Text('$star星')),
+                    Expanded(
+                      child: LinearProgressIndicator(
+                        value: stats.stats[star - 1],
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 44,
+                      child: Text('${(stats.stats[star - 1] * 100).toStringAsFixed(1)}%',
+                          textAlign: TextAlign.right),
+                    ),
+                  ]),
+                ),
+            ],
+          ]);
+        });
+      },
+    );
+  }
+}
+
+/// Awards for a subject, under the summary. Fetched once from
+/// /{type}/{id}/awards (verified 2026-11-21). Hidden entirely
+/// when there are no awards — an empty result is normal. Loads
+/// more pages on demand.
+class _AwardsSection extends StatefulWidget {
+  const _AwardsSection({required this.repository, required this.type, required this.id});
+
+  final DoubanRepository repository;
+  final String type;
+  final String id;
+
+  @override
+  State<_AwardsSection> createState() => _AwardsSectionState();
+}
+
+class _AwardsSectionState extends State<_AwardsSection> {
+  late final Future<AwardsResult> _firstPage =
+      widget.repository.fetchAwards(widget.type, widget.id);
+
+  List<Award> _extra = [];
+  int? _totalOverride;
+  bool _loadingMore = false;
+
+  Future<void> _loadMore(int loaded) async {
+    if (_loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository
+          .fetchAwards(widget.type, widget.id, start: loaded, count: 20);
+      if (!mounted) return;
+      setState(() {
+        _extra = [..._extra, ...result.awards];
+        if (result.total > 0) _totalOverride = result.total;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('$e');
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<AwardsResult>(
+      future: _firstPage,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const SizedBox.shrink();
+        final first = snapshot.data;
+        if (first == null) return const SizedBox.shrink();
+        final awards = [...first.awards, ..._extra];
+        if (awards.isEmpty) return const SizedBox.shrink();
+        final total = _totalOverride ?? first.total;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('获奖', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          for (final award in awards)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    [
+                      award.ceremonyTitle,
+                      if (award.ceremonyYear != null) '${award.ceremonyYear}',
+                    ].join(' · '),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  for (final category in award.categories)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text([
+                        category.title,
+                        category.isWon ? '获奖' : '提名',
+                        if (category.celebrityNames.isNotEmpty)
+                          category.celebrityNames.join('、'),
+                      ].join(' · ')),
+                    ),
+                ],
+              ),
+            ),
+          if (awards.length < total)
+            TextButton(
+              onPressed: _loadingMore ? null : () => _loadMore(awards.length),
+              child: Text(_loadingMore ? '加载中…' : '更多（${total - awards.length}）'),
+            ),
+        ]);
+      },
+    );
+  }
 }
 
 /// Track list for music: numbered rows with the title and the
@@ -839,10 +1011,14 @@ class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderS
         SliverToBoxAdapter(
           child: Column(
             children: [
-              _header(detail),
+              _header(detail, repository),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(detail.summary),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _AwardsSection(repository: repository, type: detail.subject.type, id: detail.subject.id),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -995,10 +1171,14 @@ class _DesktopDetail extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.only(bottom: 24),
                     children: [
-                      _header(detail),
+                      _header(detail, repository),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(detail.summary),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _AwardsSection(repository: repository, type: detail.subject.type, id: detail.subject.id),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),

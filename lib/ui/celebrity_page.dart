@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
+import 'image_preview_page.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
@@ -37,6 +38,7 @@ class CelebrityPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   ..._infoRows(context, celebrity),
                 ],
+                _CelebrityPhotos(repository: repository, id: id),
                 const SizedBox(height: 16),
                 Text(
                   '作品${detail.worksTotal > 0 ? '（${detail.worksTotal}）' : ''}',
@@ -115,6 +117,114 @@ class CelebrityPage extends StatelessWidget {
           ),
         ),
     ];
+  }
+}
+
+/// Celebrity photos, as a horizontal strip under the bio. Fetched
+/// once from /celebrity/{id}/photos (verified 2026-11-21, total
+/// 120 for Tim Robbins). Hidden when there are no photos. Tapping
+/// a photo opens the existing image preview; a trailing 更多 tile
+/// loads the next page when the strip is not yet complete.
+class _CelebrityPhotos extends StatefulWidget {
+  const _CelebrityPhotos({required this.repository, required this.id});
+
+  final DoubanRepository repository;
+  final String id;
+
+  @override
+  State<_CelebrityPhotos> createState() => _CelebrityPhotosState();
+}
+
+class _CelebrityPhotosState extends State<_CelebrityPhotos> {
+  late final Future<CelebrityPhotosResult> _firstPage =
+      widget.repository.fetchCelebrityPhotos(widget.id);
+
+  List<CelebrityPhoto> _extra = [];
+  int? _totalOverride;
+  bool _loadingMore = false;
+
+  Future<void> _loadMore(int loaded) async {
+    if (_loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await widget.repository
+          .fetchCelebrityPhotos(widget.id, start: loaded, count: 20);
+      if (!mounted) return;
+      setState(() {
+        _extra = [..._extra, ...result.photos];
+        if (result.total > 0) _totalOverride = result.total;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('$e');
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<CelebrityPhotosResult>(
+      future: _firstPage,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const SizedBox.shrink();
+        final first = snapshot.data;
+        if (first == null) return const SizedBox.shrink();
+        final photos = [...first.photos, ..._extra];
+        if (photos.isEmpty) return const SizedBox.shrink();
+        final total = _totalOverride ?? first.total;
+        final urls = photos.map((p) => p.imageUrl).whereType<String>().toList();
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(height: 16),
+          Text(
+            '剧照${total > 0 ? '（$total）' : ''}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 150,
+            child: HScrollRow(children: [
+              for (var i = 0; i < photos.length; i++)
+                _photoThumb(context, photos[i], urls, i),
+              if (photos.length < total)
+                SizedBox(
+                  width: 90,
+                  height: 150,
+                  child: OutlinedButton(
+                    onPressed: _loadingMore ? null : () => _loadMore(photos.length),
+                    child: Text(_loadingMore ? '加载中…' : '更多'),
+                  ),
+                ),
+            ]),
+          ),
+        ]);
+      },
+    );
+  }
+
+  Widget _photoThumb(BuildContext context, CelebrityPhoto photo, List<String> urls, int index) {
+    final url = photo.imageUrl;
+    if (url == null) return const SizedBox.shrink();
+    final previewIndex = urls.indexOf(url);
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ImagePreviewPage(urls: urls, initialIndex: previewIndex < 0 ? 0 : previewIndex),
+        ),
+      ),
+      child: SizedBox(
+        width: 110,
+        height: 150,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            httpHeaders: doubanImageHeaders,
+            fit: BoxFit.cover,
+            errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
+          ),
+        ),
+      ),
+    );
   }
 }
 
