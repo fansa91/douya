@@ -9,18 +9,45 @@ import 'widgets.dart';
 
 /// Celebrity page. The id must come from the subject's celebrities
 /// endpoint, because the subject detail itself only carries names.
-class CelebrityPage extends StatelessWidget {
+///
+/// Stateful so the detail future is created once in initState: the
+/// old StatelessWidget built it in build(), so every rebuild (e.g.
+/// dragging the window) re-fetched and flashed, and the photo
+/// strip's state was lost with it. _CelebrityPhotos already keeps
+/// its own future in state, so it is not the same bug.
+class CelebrityPage extends StatefulWidget {
   const CelebrityPage({super.key, required this.repository, required this.id});
 
   final DoubanRepository repository;
   final String id;
 
   @override
+  State<CelebrityPage> createState() => _CelebrityPageState();
+}
+
+class _CelebrityPageState extends State<CelebrityPage> {
+  late Future<CelebrityDetail> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.repository.fetchCelebrity(widget.id);
+  }
+
+  @override
+  void didUpdateWidget(CelebrityPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id) {
+      _future = widget.repository.fetchCelebrity(widget.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('影人')),
       body: FutureBuilder<CelebrityDetail>(
-        future: repository.fetchCelebrity(id),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const LoadingList();
@@ -29,27 +56,41 @@ class CelebrityPage extends StatelessWidget {
           final detail = snapshot.data;
           if (detail == null) return const EmptyState(message: '暂无影人信息');
           final celebrity = detail.celebrity;
+          // CustomScrollView with slivers, not a ListView: the works
+          // list is a lazy SliverList, so its footer only mounts
+          // when scrolled near. The old shrink-wrapped inner list
+          // laid out every child at once, so the footer mounted on
+          // page load and auto-loaded all ~113 works (~6 requests)
+          // on mobile, where the footer never pauses.
           return CenteredWidth(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _header(context, celebrity),
-                if (celebrity.info.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  ..._infoRows(context, celebrity),
-                ],
-                _CelebrityPhotos(repository: repository, id: id),
-                const SizedBox(height: 16),
-                Text(
-                  '作品${detail.worksTotal > 0 ? '（${detail.worksTotal}）' : ''}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _header(context, celebrity),
+                      if (celebrity.info.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        ..._infoRows(context, celebrity),
+                      ],
+                      _CelebrityPhotos(repository: widget.repository, id: widget.id),
+                      const SizedBox(height: 16),
+                      Text(
+                        '作品${detail.worksTotal > 0 ? '（${detail.worksTotal}）' : ''}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ]),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                _PagedWorks(
-                  repository: repository,
-                  id: id,
-                  initialItems: detail.works,
-                  total: detail.worksTotal,
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  sliver: _PagedWorks(
+                    repository: widget.repository,
+                    id: widget.id,
+                    initialItems: detail.works,
+                    total: detail.worksTotal,
+                  ),
                 ),
               ],
             ),
@@ -230,9 +271,11 @@ class _CelebrityPhotosState extends State<_CelebrityPhotos> {
 
 /// Paged works list: starts from the detail's first page and loads
 /// more through fetchCelebrityWorks, deduping by subject id (the
-/// endpoint's pages overlap by one entry, probed 2026-11-21). The
-/// inner list is a shrink-wrapped builder so the footer only mounts
-/// when scrolled near, instead of auto-loading at once.
+/// endpoint's pages overlap by one entry, probed 2026-11-21). A
+/// lazy SliverList, so the footer only mounts when scrolled near:
+/// the old shrink-wrapped inner list laid out every child at once,
+/// so the footer mounted on page load and auto-loaded all works
+/// (113 ≈ 6 requests) on mobile, where the footer never pauses.
 class _PagedWorks extends StatefulWidget {
   const _PagedWorks({required this.repository, required this.id, required this.initialItems, required this.total});
 
@@ -274,38 +317,38 @@ class _PagedWorksState extends State<_PagedWorks> {
 
   @override
   Widget build(BuildContext context) {
-    if (_items.isEmpty) return const EmptyState(message: '暂无作品');
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _items.length + 1,
-      itemBuilder: (context, i) {
-        if (i == _items.length) {
-          return LoadMoreFooter(
-            key: const ValueKey('celebrity-works-footer'),
-            canLoadMore: () => !_loadingMore && _items.length < _total,
-            onLoadMore: _loadMore,
-            failed: _loadMoreFailed,
-            countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
-          );
-        }
-        final work = _items[i];
-        final subtitleParts = [
-          ...work.roles,
-          if (work.subject.year != null && work.subject.year!.isNotEmpty) work.subject.year!,
-        ];
-        return SubjectRow(
-          subject: work.subject,
-          subtitle: subtitleParts.isNotEmpty ? subtitleParts.join(' · ') : null,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SubjectPage(repository: widget.repository, type: work.subject.type, id: work.subject.id),
-              ),
+    if (_items.isEmpty) return const SliverToBoxAdapter(child: EmptyState(message: '暂无作品'));
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          if (i == _items.length) {
+            return LoadMoreFooter(
+              key: const ValueKey('celebrity-works-footer'),
+              canLoadMore: () => !_loadingMore && _items.length < _total,
+              onLoadMore: _loadMore,
+              failed: _loadMoreFailed,
+              countText: _total > 0 ? '已加载 ${_items.length} / $_total' : null,
             );
-          },
-        );
-      },
+          }
+          final work = _items[i];
+          final subtitleParts = [
+            ...work.roles,
+            if (work.subject.year != null && work.subject.year!.isNotEmpty) work.subject.year!,
+          ];
+          return SubjectRow(
+            subject: work.subject,
+            subtitle: subtitleParts.isNotEmpty ? subtitleParts.join(' · ') : null,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SubjectPage(repository: widget.repository, type: work.subject.type, id: work.subject.id),
+                ),
+              );
+            },
+          );
+        },
+        childCount: _items.length + 1,
+      ),
     );
   }
 }

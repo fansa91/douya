@@ -113,7 +113,13 @@ class _TrailersPage extends StatelessWidget {
 /// comments. Mobile stacks the same sections and switches the two
 /// right-side tabs below them. Both share the same SubjectDetail
 /// view model.
-class SubjectPage extends StatelessWidget {
+///
+/// Stateful so the detail future is created once in initState: the
+/// old StatelessWidget built it in build(), so every rebuild (e.g.
+/// dragging the window) re-fetched and flashed. _RatingBars and
+/// _AwardsSection already keep their own futures in state, so they
+/// are not the same bug.
+class SubjectPage extends StatefulWidget {
   const SubjectPage({super.key, required this.repository, required this.type, required this.id});
 
   final DoubanRepository repository;
@@ -121,11 +127,32 @@ class SubjectPage extends StatelessWidget {
   final String id;
 
   @override
+  State<SubjectPage> createState() => _SubjectPageState();
+}
+
+class _SubjectPageState extends State<SubjectPage> {
+  late Future<SubjectDetail> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.repository.fetchSubject(widget.type, widget.id);
+  }
+
+  @override
+  void didUpdateWidget(SubjectPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.type != widget.type || oldWidget.id != widget.id) {
+      _future = widget.repository.fetchSubject(widget.type, widget.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('条目详情')),
       body: FutureBuilder<SubjectDetail>(
-        future: repository.fetchSubject(type, id),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const LoadingList();
@@ -135,8 +162,8 @@ class SubjectPage extends StatelessWidget {
           if (detail == null) return const EmptyState(message: '暂无详情');
           return LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < Breakpoints.paneSplit) return _MobileDetail(detail: detail, repository: repository);
-              return _DesktopDetail(detail: detail, repository: repository);
+              if (constraints.maxWidth < Breakpoints.paneSplit) return _MobileDetail(detail: detail, repository: widget.repository);
+              return _DesktopDetail(detail: detail, repository: widget.repository);
             },
           );
         },
