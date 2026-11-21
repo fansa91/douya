@@ -514,6 +514,34 @@ class RealDoubanRepository implements DoubanRepository {
     );
   }
 
+  /// Parses the Rexxar /chart/hot_search_board response (a bare list
+  /// of 15 {name, score, trend_flag, uri}) into board items. Lenient:
+  /// a missing or misshaped list yields an empty list, never a throw.
+  /// Fixture: test/fixtures/hot_search_board.json (real response,
+  /// 2026-11-21).
+  static List<HotSearchBoardItem> parseHotSearchBoard(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(HotSearchBoardItem.fromJson)
+        .where((item) => item.name.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  Future<List<HotSearchBoardItem>> fetchHotSearchBoard() async {
+    // Rexxar /chart/hot_search_board (unsigned, guest 200,
+    // 2026-11-21). 5-minute cache: a hot list is slow-changing, and
+    // the search page reads it on every empty state.
+    final data = await _rexxarGet(
+      'chart/hot_search_board',
+      {},
+      referer: _mReferer,
+      cacheTtl: const Duration(minutes: 5),
+    );
+    return parseHotSearchBoard(data);
+  }
+
   @override
   Future<List<Subject>> fetchSearchHots() async {
     // Frodo /search/hots (guest 200, 2026-10-31): subjects[10] are

@@ -32,6 +32,23 @@ void main() {
     });
   });
 
+  group('parseHotSearchBoard', () {
+    test('parses the bare list from the real response', () {
+      final text = File('test/fixtures/hot_search_board.json').readAsStringSync();
+      final items = RealDoubanRepository.parseHotSearchBoard(jsonDecode(text));
+      expect(items.length, 15);
+      expect(items[0].name, '后会友期市场占有率下跌');
+      expect(items[0].score, 27232);
+      expect(items[0].scoreLabel, '2.7万');
+      expect(items[0].uri, startsWith('douban://douban.com/search/result?q='));
+    });
+
+    test('a missing or misshaped list yields an empty list, never a throw', () {
+      expect(RealDoubanRepository.parseHotSearchBoard({}), isEmpty);
+      expect(RealDoubanRepository.parseHotSearchBoard('nope'), isEmpty);
+    });
+  });
+
   group('parseRankBoards', () {
     test('parses boards with preview subjects from the real response', () {
       final boards = RealDoubanRepository.parseRankBoards(fixture('rank_boards_tag49.json'));

@@ -18,6 +18,7 @@ import 'package:douya/ui/group_topics_view.dart';
 import 'package:douya/ui/home_page.dart';
 import 'package:douya/ui/image_preview_page.dart';
 import 'package:douya/ui/rankings_page.dart';
+import 'package:douya/ui/search_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/topic_detail_view.dart';
 import 'package:douya/ui/subject_page.dart';
@@ -185,6 +186,26 @@ class _SlowBrowseRepo extends FakeDoubanRepository {
   Future<BrowseResult> fetchBrowse(String category, String filter,
           {int start = 0, int count = 20}) =>
       (calls['$category/$filter/$start'] = Completer<BrowseResult>()).future;
+}
+
+/// A repo whose hot search board is empty, so the search page falls
+/// back to the old hot-search chips.
+class _NoBoardRepo extends FakeDoubanRepository {
+  @override
+  Future<List<HotSearchBoardItem>> fetchHotSearchBoard() async => const [];
+}
+
+/// A repo with 12 board items, for the mobile "查看全部" expander.
+class _ManyBoardRepo extends FakeDoubanRepository {
+  @override
+  Future<List<HotSearchBoardItem>> fetchHotSearchBoard() async => [
+    for (var i = 1; i <= 12; i++)
+      HotSearchBoardItem(
+        name: '热搜$i',
+        score: 20000 - i * 1000,
+        uri: 'douban://douban.com/search/result?q=%23%E7%83%AD%E6%90%9C$i%23',
+      ),
+  ];
 }
 
 /// A music subject detail with a track list, for the music page test.
@@ -1418,6 +1439,50 @@ void main() {
     expect(find.text('发行时间：2024-01-01'), findsOneWidget);
     expect(find.text('出版方：示例唱片'), findsOneWidget);
     expect(find.text('介质：数字(Digital)'), findsOneWidget);
+  });
+
+  // Step 2: the search page's empty state shows the hot search board
+  // (rank, name, abbreviated score) from the fake repository.
+  testWidgets('search page shows the hot search board', (tester) async {
+    await _pumpPage(tester, const SearchPage(repository: FakeDoubanRepository()), const Size(390, 3000));
+    expect(find.text('热搜榜'), findsOneWidget);
+    expect(find.text('示例热搜一'), findsOneWidget);
+    expect(find.text('2.7万'), findsOneWidget);
+    expect(find.text('示例热搜三'), findsOneWidget);
+    expect(find.text('9200'), findsOneWidget);
+    expect(find.text('热搜'), findsNothing);
+  });
+
+  // Step 2: tapping a board row runs the search with its keyword.
+  testWidgets('tapping a board row searches its keyword', (tester) async {
+    await _pumpPage(tester, const SearchPage(repository: FakeDoubanRepository()), const Size(390, 3000));
+    await tester.tap(find.text('示例热搜一'));
+    await tester.pumpAndSettle();
+    expect(find.text('肖申克的救赎'), findsWidgets);
+    expect(find.text('热搜榜'), findsNothing);
+  });
+
+  // Step 2: when the board fails, the old hot-search chips are the
+  // fallback instead of an empty board.
+  testWidgets('search page falls back to hot chips when the board is empty', (tester) async {
+    await _pumpPage(tester, SearchPage(repository: _NoBoardRepo()), const Size(390, 3000));
+    expect(find.text('热搜榜'), findsNothing);
+    expect(find.text('热搜'), findsOneWidget);
+    expect(find.text('肖申克的救赎'), findsWidgets);
+  });
+
+  // Step 2: on mobile only the first 10 board rows show until
+  // "查看全部" expands the list.
+  testWidgets('board shows 10 rows on mobile until expanded', (tester) async {
+    await _pumpPage(tester, SearchPage(repository: _ManyBoardRepo()), const Size(390, 3000));
+    expect(find.text('热搜10'), findsOneWidget);
+    expect(find.text('热搜11'), findsNothing);
+    expect(find.text('查看全部（12 条）'), findsOneWidget);
+    await tester.tap(find.text('查看全部（12 条）'));
+    await tester.pumpAndSettle();
+    expect(find.text('热搜11'), findsOneWidget);
+    expect(find.text('热搜12'), findsOneWidget);
+    expect(find.text('查看全部（12 条）'), findsNothing);
   });
 
   // Item 3: a long swipe down dismisses the preview; a short slow

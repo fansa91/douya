@@ -442,6 +442,21 @@ void main() {
       expect(work.roles, ['演员 (饰 安迪·杜佛兰 Andy Dufresne)']);
     });
 
+    test('HotSearchBoardItem parses the board entry and abbreviates the score', () {
+      final item = HotSearchBoardItem.fromJson(<String, dynamic>{
+        'name': '后会友期市场占有率下跌',
+        'score': 27232,
+        'trend_flag': 2,
+        'uri': 'douban://douban.com/search/result?q=%23%E5%90%8E%E4%BC%9A%E5%8F%8B%E6%9C%9F%23',
+      });
+      expect(item.name, '后会友期市场占有率下跌');
+      expect(item.score, 27232);
+      expect(item.trendFlag, 2);
+      expect(item.scoreLabel, '2.7万');
+      expect(const HotSearchBoardItem(name: '小', score: 9200).scoreLabel, '9200');
+      expect(const HotSearchBoardItem(name: '整', score: 10000).scoreLabel, '1万');
+    });
+
     test('Song parses string numbers and hides a zero duration', () {
       final withDuration = Song.fromJson(<String, dynamic>{
         'title': '大船',

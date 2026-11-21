@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
+import 'breakpoints.dart';
 import 'group_topics_view.dart';
 import 'subject_page.dart';
 import 'user_page.dart';
@@ -39,6 +40,12 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
   List<Subject> _hots = const [];
   bool _hotsLoaded = false;
 
+  /// Hot search board (primary hot list). The old Frodo hots are only
+  /// the fallback, loaded when the board fails or comes back empty.
+  List<HotSearchBoardItem> _board = const [];
+  bool _boardLoaded = false;
+  bool _boardExpanded = false;
+
   String? _submitted;
   int _tab = 0;
   String? _selectedType;
@@ -57,7 +64,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _loadHots();
+    _loadBoard();
   }
 
   @override
@@ -69,6 +76,19 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     super.dispose();
   }
 
+  Future<void> _loadBoard() async {
+    try {
+      final board = await widget.repository.fetchHotSearchBoard();
+      if (mounted) setState(() => _board = board);
+    } catch (_) {
+      // The board is a nice-to-have; the old hot-search chips below
+      // are the fallback.
+    } finally {
+      if (mounted) setState(() => _boardLoaded = true);
+    }
+    if (_board.isEmpty) _loadHots();
+  }
+
   Future<void> _loadHots() async {
     try {
       final hots = await widget.repository.fetchSearchHots();
@@ -77,6 +97,31 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       // Hot search is a nice-to-have; an empty list is fine.
     } finally {
       if (mounted) setState(() => _hotsLoaded = true);
+    }
+  }
+
+  /// Handles a hot-board deep link: a search link runs the search
+  /// with its keyword (the #...# markers are the topic's own
+  /// delimiters, stripped before searching); a subject link opens
+  /// the subject page. Anything else is ignored (no dead button).
+  /// The full deep-link parser (step 4) takes over these shapes.
+  void _openBoardLink(HotSearchBoardItem item) {
+    final uri = Uri.tryParse(item.uri);
+    if (uri == null) return;
+    if (uri.scheme == 'douban' && uri.path == '/search/result') {
+      final keyword = (uri.queryParameters['q'] ?? '').replaceAll('#', '').trim();
+      if (keyword.isEmpty) return;
+      _controller.text = keyword;
+      _submit(keyword);
+      return;
+    }
+    final match = RegExp(r'^/(movie|tv|book|music)/(\w+)$').firstMatch(uri.path);
+    if (uri.scheme == 'douban' && match != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => SubjectPage(repository: widget.repository, type: match.group(1)!, id: match.group(2)!),
+        ),
+      );
     }
   }
 
@@ -243,6 +288,70 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     );
   }
 
+  /// Hot search board: ranked rows (rank, name, heat score). Mobile
+  /// shows the first 10 with a "查看全部" expander; desktop shows all
+  /// in two columns. The trend flag is not rendered: its meaning is
+  /// unverified (see HotSearchBoardItem).
+  Widget _boardSection() {
+    final compact = Breakpoints.of(MediaQuery.sizeOf(context).width) == WindowSize.compact;
+    final shown = compact && !_boardExpanded && _board.length > 10 ? 10 : _board.length;
+    final rows = [for (var i = 0; i < shown; i++) _boardRow(_board[i], i + 1)];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text('热搜榜', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        if (compact)
+          ...rows
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: Column(children: rows.sublist(0, (rows.length + 1) ~/ 2))),
+              Expanded(child: Column(children: rows.sublist((rows.length + 1) ~/ 2))),
+            ],
+          ),
+        if (compact && !_boardExpanded && _board.length > 10)
+          Center(
+            child: TextButton(
+              onPressed: () => setState(() => _boardExpanded = true),
+              child: Text('查看全部（${_board.length} 条）'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _boardRow(HotSearchBoardItem item, int rank) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final top3 = rank <= 3;
+    return InkWell(
+      onTap: () => _openBoardLink(item),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              child: Text(
+                '$rank',
+                style: TextStyle(
+                  fontWeight: top3 ? FontWeight.bold : FontWeight.normal,
+                  color: top3 ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Expanded(child: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 8),
+            Text(item.scoreLabel, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _emptyState() {
     final settings = SettingsStore.instance;
     return AnimatedBuilder(
@@ -252,16 +361,17 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         return CenteredWidth(
           child: ListView(
             children: [
-              if (_hots.isNotEmpty)
-              _chipSection('热搜', _hots.map((s) => s.title).where((t) => t.isNotEmpty).toList(), (title) {
-                _controller.text = title;
-                _submit(title);
-              }),
-            if (_hotsLoaded && _hots.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('热搜暂不可用，输入关键词仍可搜索。'),
-              ),
+              if (_board.isNotEmpty) _boardSection(),
+              if (_boardLoaded && _board.isEmpty && _hots.isNotEmpty)
+                _chipSection('热搜', _hots.map((s) => s.title).where((t) => t.isNotEmpty).toList(), (title) {
+                  _controller.text = title;
+                  _submit(title);
+                }),
+              if (_boardLoaded && _hotsLoaded && _board.isEmpty && _hots.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('热搜暂不可用，输入关键词仍可搜索。'),
+                ),
             _chipSection(
               '搜索历史',
               currentHistory,
@@ -289,7 +399,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                       },
                     ),
             ),
-            if (currentHistory.isEmpty && _hots.isEmpty)
+            if (currentHistory.isEmpty && _board.isEmpty && _hots.isEmpty)
               const EmptyState(message: '输入关键词，先看联想结果；回车进入完整搜索。'),
             ],
           ),

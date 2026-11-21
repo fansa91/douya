@@ -556,6 +556,37 @@ class SearchGroup {
   }
 }
 
+/// One entry of the hot search board (Rexxar /chart/hot_search_board,
+/// verified 2026-11-21): 15 items with a heat score and a deep link.
+/// `trendFlag` is kept raw: two samples minutes apart kept all ranks
+/// but changed several flags, so it tracks neither rank movement nor
+/// score direction; do not render a trend icon until its meaning is
+/// confirmed. `uri` is kept raw for the deep-link parser.
+class HotSearchBoardItem {
+  const HotSearchBoardItem({required this.name, this.score = 0, this.trendFlag = 0, this.uri = ''});
+
+  final String name;
+  final int score;
+  final int trendFlag;
+  final String uri;
+
+  factory HotSearchBoardItem.fromJson(Map<String, dynamic> json) {
+    return HotSearchBoardItem(
+      name: (json['name'] as String?) ?? '',
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      trendFlag: (json['trend_flag'] as num?)?.toInt() ?? 0,
+      uri: (json['uri'] as String?) ?? '',
+    );
+  }
+
+  /// Heat score abbreviated (27232 -> "2.7万"), for the board rows.
+  String get scoreLabel {
+    if (score < 10000) return '$score';
+    final text = (score / 10000).toStringAsFixed(1);
+    return '${text.endsWith('.0') ? text.substring(0, text.length - 2) : text}万';
+  }
+}
+
 class SearchGroupResult {
   const SearchGroupResult({this.groups = const [], this.topics = const []});
 

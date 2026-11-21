@@ -67,6 +67,15 @@ abstract class DoubanRepository {
   Future<SearchSubjectsResult> fetchSearchSubjects(String query, {String? type, int start = 0, int count = 20});
   Future<SuggestionResult> fetchSearchSuggestion(String query);
   Future<List<Subject>> fetchSearchHots();
+
+  /// Hot search board: Rexxar /chart/hot_search_board (unsigned,
+  /// guest 200, verified 2026-11-21). A bare list of 15 {name, score,
+  /// trend_flag, uri}. This is the search page's primary hot list;
+  /// fetchSearchHots (Frodo /search/hots, 10 subjects, no score or
+  /// trend) is only the fallback when this board fails or comes back
+  /// empty. A wrong-shaped response returns an empty list; a network
+  /// error throws.
+  Future<List<HotSearchBoardItem>> fetchHotSearchBoard();
   Future<List<SearchContentItem>> fetchSearchContent(String query, {int start = 0, int count = 20});
   Future<SearchGroupResult> fetchSearchGroups(String query, {int start = 0, int count = 20});
   Future<List<SearchUser>> fetchSearchUsers(String query, {int start = 0, int count = 20});

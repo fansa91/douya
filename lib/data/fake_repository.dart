@@ -125,6 +125,13 @@ return SuggestionResult(words: [query], subjects: const [_shawshank]);
 Future<List<Subject>> fetchSearchHots() async => const [_shawshank, _honglou];
 
 @override
+Future<List<HotSearchBoardItem>> fetchHotSearchBoard() async => const [
+  HotSearchBoardItem(name: '示例热搜一', score: 27232, uri: 'douban://douban.com/search/result?q=%23%E7%A4%BA%E4%BE%8B%E7%83%AD%E6%90%9C%E4%B8%80%23'),
+  HotSearchBoardItem(name: '示例热搜二', score: 18500, uri: 'douban://douban.com/search/result?q=%23%E7%A4%BA%E4%BE%8B%E7%83%AD%E6%90%9C%E4%BA%8C%23'),
+  HotSearchBoardItem(name: '示例热搜三', score: 9200, uri: 'douban://douban.com/search/result?q=%23%E7%A4%BA%E4%BE%8B%E7%83%AD%E6%90%9C%E4%B8%89%23'),
+];
+
+@override
 Future<List<SearchContentItem>> fetchSearchContent(String query, {int start = 0, int count = 20}) async {
 if (query.isEmpty) return const [];
 return const [SearchContentItem(id: '1', title: '示例话题', subtitle: '离线示例，真实数据走 Frodo /search/content_tab')];
