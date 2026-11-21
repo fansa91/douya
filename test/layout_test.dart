@@ -1260,9 +1260,11 @@ void main() {
   });
 
   // Item 1: on mobile the tab row pins once the body has scrolled
-  // away; before scrolling it sits below the fold.
+  // away; before scrolling it sits below the fold. (390x500: the
+  // compact flat header is short enough that the row would already
+  // be in view at 800 tall.)
   testWidgets('topic detail tab row pins on mobile', (tester) async {
-    tester.view.physicalSize = const Size(390, 800);
+    tester.view.physicalSize = const Size(390, 500);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -1278,6 +1280,8 @@ void main() {
   });
 
   // Step 3: 只看楼主 keeps only the topic author's replies.
+  // '房东' appears twice: the header's author line and the author's
+  // own reply (the header used to merge the name into one string).
   testWidgets('topic detail only-author filter', (tester) async {
     await _pumpPage(
       tester,
@@ -1286,7 +1290,7 @@ void main() {
     );
     await tester.tap(find.text('只看楼主'));
     await tester.pumpAndSettle();
-    expect(find.text('房东'), findsOneWidget);
+    expect(find.text('房东'), findsNWidgets(2));
     expect(find.text('路人3'), findsNothing);
     expect(tester.takeException(), isNull);
   });

@@ -32,6 +32,10 @@ class TopicDetailPage extends StatefulWidget {
 class _TopicDetailPageState extends State<TopicDetailPage> {
   final _detail = ValueNotifier<TopicDetail?>(null);
 
+  /// True once the body has scrolled past the header: the AppBar
+  /// then shows the topic title instead of the fixed '话题详情'.
+  bool _showTitle = false;
+
   @override
   void dispose() {
     _detail.dispose();
@@ -42,7 +46,16 @@ class _TopicDetailPageState extends State<TopicDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('话题详情'),
+        title: ValueListenableBuilder<TopicDetail?>(
+          valueListenable: _detail,
+          builder: (context, detail, _) {
+            final title = detail?.topic.title ?? widget.initialTopic?.title;
+            if (_showTitle && title != null && title.isNotEmpty) {
+              return Text(title, maxLines: 1, overflow: TextOverflow.ellipsis);
+            }
+            return const Text('话题详情');
+          },
+        ),
         actions: [
           ValueListenableBuilder<TopicDetail?>(
             valueListenable: _detail,
@@ -91,11 +104,21 @@ class _TopicDetailPageState extends State<TopicDetailPage> {
           ),
         ],
       ),
-      body: TopicDetailView(
-        repository: widget.repository,
-        topicId: widget.topicId,
-        initialTopic: widget.initialTopic,
-        onDetail: (d) => _detail.value = d,
+      body: NotificationListener<ScrollNotification>(
+        // 120px past the top the header title has scrolled away,
+        // so the AppBar takes over showing it. Only setState when
+        // the flag actually flips.
+        onNotification: (n) {
+          final show = n.metrics.pixels > 120;
+          if (show != _showTitle) setState(() => _showTitle = show);
+          return false;
+        },
+        child: TopicDetailView(
+          repository: widget.repository,
+          topicId: widget.topicId,
+          initialTopic: widget.initialTopic,
+          onDetail: (d) => _detail.value = d,
+        ),
       ),
     );
   }
@@ -128,6 +151,20 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   late Future<TopicDetail> _future = widget.repository.fetchTopic(widget.topicId);
   late final TabController _tabController = TabController(length: 2, vsync: this);
 
+  /// Mobile scroll controller, for the floating 跳到回应 / 回到顶部
+  /// button. Desktop keeps its own scroll views (left list + right
+  /// comments column) and shows no jump button.
+  final _scrollController = ScrollController();
+
+  /// The mobile tab row, so 跳到回应 can scroll it into view.
+  final _tabRowKey = GlobalKey();
+
+  /// Floating jump button (mobile, long posts only). _atTop picks
+  /// the label: near the top it jumps to the replies, once scrolled
+  /// down it goes back to the top.
+  bool _showJump = false;
+  bool _atTop = true;
+
   /// Reply tab: 0 最新， 1 热门. The TabBar switches it; there is
   /// no TabBarView because both tabs render into the same list.
   int _tab = 0;
@@ -146,9 +183,52 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   bool _onlyAuthor = false;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // Long post: the content is taller than the viewport by a
+    // margin. The label flips once the user has left the top.
+    final isLong = pos.maxScrollExtent > 300;
+    final atTop = pos.pixels < 200;
+    if (isLong != _showJump || atTop != _atTop) {
+      setState(() {
+        _showJump = isLong;
+        _atTop = atTop;
+      });
+    }
+  }
+
+  void _jumpToReplies() {
+    final context = _tabRowKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -299,6 +379,9 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _loadedId == detail.topic.id) widget.onDetail?.call(detail);
           });
+          // The content is laid out after this frame: re-check
+          // whether the post is long enough for the jump button.
+          WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
         }
         final blocks = parseContentBlocks(detail.contentHtml);
         final replyTitle = _total > 0 ? '回应 $_total' : '回应 ${_comments.length}';
@@ -321,39 +404,61 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
         return LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth < Breakpoints.paneSplit) {
-              return CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _headerCard(context, detail),
-                          const SizedBox(height: 16),
-                          ..._bodyBlocks(context, detail, blocks),
-                          _topicMedia(context, detail, blocks),
-                          const Divider(height: 32),
-                          Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
+              return Stack(
+                children: [
+                  CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _header(context, detail),
+                              const SizedBox(height: 16),
+                              ..._bodyBlocks(context, detail, blocks),
+                              _topicMedia(context, detail, blocks),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: PinnedTabBarDelegate(
+                          _tabBarRow(detail, replyTitle, rowKey: _tabRowKey),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverMainAxisGroup(
+                          slivers: _tabContentSlivers(context, detail, visible),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_showJump)
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: FloatingActionButton.extended(
+                        onPressed: _atTop ? _jumpToReplies : _scrollToTop,
+                        icon: Icon(_atTop ? Icons.arrow_downward : Icons.arrow_upward),
+                        label: Text(_atTop ? '跳到回应' : '回到顶部'),
                       ),
                     ),
-                  ),
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: PinnedTabBarDelegate(_tabBarRow(detail)),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.all(16),
-                    sliver: SliverMainAxisGroup(
-                      slivers: _tabContentSlivers(context, detail, visible),
-                    ),
-                  ),
                 ],
               );
             }
             // The split itself is capped at 1440 so neither column
-            // stretches across an ultrawide window.
+            // stretches across an ultrawide window. The right
+            // column is ~34% of the split width, clamped to
+            // 360–460: at 900 wide that is 360 (not 440), so the
+            // left column keeps ~540 for the body. The split
+            // threshold stays 900 (paneSplit is shared with the
+            // subject page, so it is not raised here).
+            final rowWidth = constraints.maxWidth.clamp(0.0, Breakpoints.gridMaxWidth);
+            final rightWidth = (rowWidth * 0.34).clamp(360.0, 460.0);
             return CenteredWidth(
               maxWidth: Breakpoints.gridMaxWidth,
               child: Row(
@@ -364,7 +469,7 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
                       child: ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
-                          _headerCard(context, detail),
+                          _header(context, detail),
                           const SizedBox(height: 16),
                           ..._bodyBlocks(context, detail, blocks),
                           _topicMedia(context, detail, blocks),
@@ -374,20 +479,13 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
                   ),
                   const VerticalDivider(width: 1),
                   SizedBox(
-                    width: 440,
+                    width: rightWidth,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              _tabBarRow(detail),
-                            ],
-                          ),
+                          child: _tabBarRow(detail, replyTitle),
                         ),
                         const Divider(height: 1),
                         Expanded(
@@ -414,13 +512,19 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
     );
   }
 
-  /// The sticky tab row: 最新 / 热门 plus the 只看楼主 toggle,
-  /// which applies to both tabs. On mobile this row is pinned by
-  /// a SliverPersistentHeader; on desktop it sits in the pinned
-  /// header of the right column.
-  Widget _tabBarRow(TopicDetail detail) {
+  /// The sticky tab row: the reply count, 最新 / 热门, plus the
+  /// 只看楼主 toggle, which applies to both tabs. The count used to
+  /// be its own line above this row; merging it in saves a row of
+  /// height. On mobile this row is pinned by a SliverPersistent-
+  /// Header; on desktop it sits in the pinned header of the right
+  /// column. [rowKey] is the mobile row only, so 跳到回应 can
+  /// scroll it into view.
+  Widget _tabBarRow(TopicDetail detail, String replyTitle, {Key? rowKey}) {
     return Row(
+      key: rowKey,
       children: [
+        Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
         Expanded(
           child: TabBar(
             controller: _tabController,
@@ -498,52 +602,88 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
     ];
   }
 
-  Widget _headerCard(BuildContext context, TopicDetail detail) {
-    final authorLine = [
-      if (detail.topic.authorName.isNotEmpty) detail.topic.authorName,
+  /// Flat header, no Card: the title, then the author row split
+  /// into two lines (name, then "时间 · IP属地"), then the source
+  /// group as a tappable capsule. The old single-line "name ·
+  /// IP属地 · time" string wrapped irregularly on narrow screens,
+  /// and the group row was a 16px icon line.
+  Widget _header(BuildContext context, TopicDetail detail) {
+    final topic = detail.topic;
+    final meta = [
+      if (topic.createTime.isNotEmpty) topic.createTime,
       if (detail.ipLocation != null && detail.ipLocation!.isNotEmpty) 'IP属地：${detail.ipLocation}',
-      if (detail.topic.createTime.isNotEmpty) detail.topic.createTime,
     ].join(' · ');
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(topic.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Row(
           children: [
-            Text(detail.topic.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _authorAvatar(detail.topic.authorAvatar),
-                const SizedBox(width: 8),
-                Expanded(child: Text(authorLine)),
-              ],
-            ),
-            if (detail.groupName.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: detail.groupId.isEmpty
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => GroupTopicsPage(repository: widget.repository, groupId: detail.groupId),
-                          ),
-                        );
-                      },
-                child: Row(
-                  children: [
-                    const Icon(Icons.group_outlined, size: 16),
-                    const SizedBox(width: 4),
-                    Expanded(child: Text(detail.groupName)),
-                    if (detail.groupId.isNotEmpty) const Icon(Icons.chevron_right, size: 16),
+            _authorAvatar(topic.authorAvatar),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(topic.authorName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(meta, style: Theme.of(context).textTheme.bodySmall),
                   ],
-                ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
-      ),
+        if (detail.groupName.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _groupCapsule(context, detail),
+        ],
+      ],
+    );
+  }
+
+  /// Source group as a tappable pill, at least 40dp tall so the
+  /// touch target is big enough. No group id means no page to open,
+  /// so the capsule is shown without a tap handler.
+  Widget _groupCapsule(BuildContext context, TopicDetail detail) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.group_outlined, size: 16),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            detail.groupName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (detail.groupId.isNotEmpty) const Icon(Icons.chevron_right, size: 16),
+      ],
+    );
+    final pill = Container(
+      constraints: const BoxConstraints(minHeight: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: content,
+    );
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: detail.groupId.isEmpty
+          ? pill
+          : InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => GroupTopicsPage(repository: widget.repository, groupId: detail.groupId),
+                  ),
+                );
+              },
+              child: pill,
+            ),
     );
   }
 
@@ -553,7 +693,7 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   List<Widget> _bodyBlocks(BuildContext context, TopicDetail detail, List<ContentBlock> blocks) {
     if (blocks.isEmpty) {
       return [
-        SelectableText(detail.content, style: const TextStyle(height: 1.6)),
+        SelectableText(detail.content, style: const TextStyle(fontSize: 15, height: 1.6)),
         const SizedBox(height: 8),
       ];
     }
@@ -563,14 +703,14 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
         if (block.isImage)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _bodyImage(context, block.imageUrl!, imageUrls),
+            child: _bodyImage(context, block.imageUrl!, imageUrls, detail),
           )
         else
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: SelectableText.rich(
               TextSpan(
-                style: const TextStyle(height: 1.6),
+                style: const TextStyle(fontSize: 15, height: 1.6),
                 children: [
                   for (final run in block.runs)
                     run.link == null
@@ -591,7 +731,21 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
     ];
   }
 
-  Widget _bodyImage(BuildContext context, String url, List<String> allUrls) {
+  /// Body image: full width at its natural aspect ratio, from the
+  /// structured photo's pixel size (the photos array and the
+  /// content's <img> URLs are the same images). The aspect ratio
+  /// reserves the height before the image loads, so the body does
+  /// not jump; the image fades in. A very tall image (height over
+  /// ~2.5x the width) is capped at 420 tall with a 点击查看全图 hint
+  /// instead of dominating the page. Decoded at the display size.
+  /// Falls back to 4:3 (the feed card's fallback) when the photo
+  /// cannot be matched.
+  Widget _bodyImage(BuildContext context, String url, List<String> allUrls, TopicDetail detail) {
+    final photo = _photoForUrl(detail, url);
+    final aspect = (photo?.width != null && photo?.height != null && photo!.width! > 0 && photo.height! > 0)
+        ? photo.width! / photo.height!
+        : 4 / 3;
+    final isTall = aspect < 0.4;
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -600,18 +754,69 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 420),
-          child: CachedNetworkImage(
-            imageUrl: url,
-            httpHeaders: doubanImageHeaders,
-            width: double.infinity,
-            fit: BoxFit.contain,
-            errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cacheWidth =
+                (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context)).round();
+            final image = CachedNetworkImage(
+              imageUrl: url,
+              httpHeaders: doubanImageHeaders,
+              memCacheWidth: cacheWidth,
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 200),
+              placeholder: (context, url) => Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
+              errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
+            );
+            if (isTall) {
+              return Stack(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 420,
+                    child: image,
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        '点击查看全图',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+            return AspectRatio(aspectRatio: aspect, child: image);
+          },
         ),
       ),
     );
+  }
+
+  /// Match a body <img> URL to its structured photo, for the pixel
+  /// size. Exact match on any URL variant first, then the photo id
+  /// embedded in the filename (p<id>.jpg).
+  Photo? _photoForUrl(TopicDetail detail, String url) {
+    for (final p in detail.photos) {
+      if (p.url == url || p.urlLarge == url || p.urlSmall == url) return p;
+    }
+    final m = RegExp(r'/p(\d+)\.').firstMatch(url);
+    if (m != null) {
+      final id = m.group(1);
+      for (final p in detail.photos) {
+        if (p.id == id) return p;
+      }
+    }
+    return null;
   }
 
   /// Attached video, plus any photos from the structured array
