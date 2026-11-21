@@ -303,11 +303,15 @@ class _SubjectPosterCardState extends State<SubjectPosterCard> {
 
 /// Compact list row for collections and search results.
 class SubjectRow extends StatelessWidget {
-  const SubjectRow({super.key, required this.subject, this.trailing, this.onTap});
+  const SubjectRow({super.key, required this.subject, this.trailing, this.onTap, this.subtitle});
 
   final Subject subject;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Override for the subtitle line (default: cardSubtitle ?? year
+  /// ?? type). The celebrity works list uses it for the role text.
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -345,7 +349,7 @@ class SubjectRow extends StatelessWidget {
               ),
       ),
         title: Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(subject.cardSubtitle ?? subject.year ?? subject.type),
+        subtitle: Text(subtitle ?? subject.cardSubtitle ?? subject.year ?? subject.type),
         trailing: trailing ??
             (subject.rating != null && subject.rating!.value > 0 ? RatingText(rating: subject.rating!) : null),
         onTap: onTap,

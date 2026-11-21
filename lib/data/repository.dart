@@ -136,4 +136,9 @@ abstract class DoubanRepository {
   /// endpoint returns a `total`; stop when loaded reaches it.
   Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, int count = 20});
   Future<CelebrityDetail> fetchCelebrity(String id);
+
+  /// Paged works for a celebrity (the /works endpoint pages with
+  /// start/count; total 113 for the probed case). The detail's
+  /// first page comes from fetchCelebrity.
+  Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int count = 20});
 }

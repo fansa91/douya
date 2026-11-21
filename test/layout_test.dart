@@ -12,6 +12,7 @@ import 'package:douya/models/models.dart';
 import 'package:douya/ui/adaptive_scaffold.dart';
 import 'package:douya/ui/breakpoints.dart';
 import 'package:douya/ui/browse_page.dart';
+import 'package:douya/ui/celebrity_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/group_topics_view.dart';
 import 'package:douya/ui/home_page.dart';
@@ -182,6 +183,26 @@ class _SlowBrowseRepo extends FakeDoubanRepository {
   Future<BrowseResult> fetchBrowse(String category, String filter,
           {int start = 0, int count = 20}) =>
       (calls['$category/$filter/$start'] = Completer<BrowseResult>()).future;
+}
+
+/// A celebrity repo with 25 works: the first page (20) comes from
+/// fetchCelebrity, the rest through fetchCelebrityWorks.
+class _PagedCelebrityRepo extends FakeDoubanRepository {
+  static List<CelebrityWork> get _works25 {
+    return List<CelebrityWork>.generate(25, (i) {
+      return CelebrityWork(
+        subject: Subject(id: 'w$i', type: 'movie', title: '作品$i', year: '200${i % 10}'),
+        roles: const ['演员'],
+      );
+    });
+  }
+
+  @override
+  Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int count = 20}) async {
+    final all = _works25;
+    final page = start < all.length ? all.sublist(start, (start + count).clamp(0, all.length)) : const <CelebrityWork>[];
+    return CelebrityWorksResult(works: page, total: all.length);
+  }
 }
 
 /// A topic repo with 100 replies and no popular_comments. Votes
@@ -1321,6 +1342,39 @@ void main() {
     expect(second.total, 25);
     final pastEnd = await _repository.fetchTopicComments('504122375', start: 25, count: 20);
     expect(pastEnd.comments, isEmpty);
+  });
+
+  // Item 2: the celebrity page shows the bio (photo header, English
+  // name, short info, info rows) and works with their roles.
+  testWidgets('celebrity page shows bio and works with roles', (tester) async {
+    await _pumpPage(
+      tester,
+      const CelebrityPage(repository: _repository, id: '1054521'),
+      const Size(390, 3000),
+    );
+    expect(find.text('蒂姆·罗宾斯'), findsOneWidget);
+    expect(find.text('Tim Robbins'), findsOneWidget);
+    expect(find.text('演员 导演 制片人 / 肖申克的救赎'), findsOneWidget);
+    expect(find.text('性别'), findsOneWidget);
+    expect(find.text('男'), findsOneWidget);
+    expect(find.text('出生日期'), findsOneWidget);
+    expect(find.text('1958年10月16日'), findsOneWidget);
+    expect(find.text('肖申克的救赎'), findsOneWidget);
+    expect(find.text('演员 (饰 安迪·杜佛兰 Andy Dufresne) · 1994'), findsOneWidget);
+    expect(find.text('绿里奇迹'), findsOneWidget);
+    expect(find.text('作品（2）'), findsOneWidget);
+  });
+
+  // Item 2: works page through fetchCelebrityWorks (25 works: 20 on
+  // the first page, 5 more on load-more).
+  testWidgets('celebrity page loads more works', (tester) async {
+    await _pumpPage(
+      tester,
+      CelebrityPage(repository: _PagedCelebrityRepo(), id: '1054521'),
+      const Size(390, 3000),
+    );
+    expect(find.text('作品24'), findsOneWidget);
+    expect(find.text('已加载 25 / 25'), findsOneWidget);
   });
 
   // Step 4: the group tab has 热门 | 已收藏 segments; the favorites

@@ -385,11 +385,37 @@ Future<ReviewDetail> fetchReview(String reviewId) async {
   );
 }
 
+/// Sample works for the fake celebrity (both on the first page).
+static const _fakeCelebrityWorks = <CelebrityWork>[
+  CelebrityWork(subject: _shawshank, roles: ['演员 (饰 安迪·杜佛兰 Andy Dufresne)']),
+  CelebrityWork(
+    subject: Subject(id: '1292971', type: 'movie', title: '绿里奇迹', rating: Rating(value: 8.9, max: 10, count: 1200000), year: '1999', cardSubtitle: '剧情 / 奇幻'),
+    roles: ['演员 (饰 保罗·艾吉康)'],
+  ),
+];
+
 @override
 Future<CelebrityDetail> fetchCelebrity(String id) async {
-return const CelebrityDetail(
-celebrity: Celebrity(id: '1054521', name: '蒂姆·罗宾斯', character: '饰 安迪·杜佛兰'),
-works: [_shawshank],
-);
+  final page = await fetchCelebrityWorks(id, start: 0, count: 20);
+  return CelebrityDetail(
+    celebrity: const Celebrity(
+      id: '1054521',
+      name: '蒂姆·罗宾斯',
+      avatar: 'https://img3.doubanio.com/view/celebrity/s_ratio_celebrity/public/p12345.jpg',
+      latinTitle: 'Tim Robbins',
+      shortInfo: '演员 导演 制片人 / 肖申克的救赎',
+      info: [('性别', '男'), ('出生日期', '1958年10月16日'), ('出生地', '美国,加利福尼亚州,西科维纳')],
+      character: '饰 安迪·杜佛兰',
+    ),
+    works: page.works,
+    worksTotal: page.total,
+  );
+}
+
+@override
+Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int count = 20}) async {
+  final total = _fakeCelebrityWorks.length;
+  final page = start < total ? _fakeCelebrityWorks.sublist(start, (start + count).clamp(0, total)) : const <CelebrityWork>[];
+  return CelebrityWorksResult(works: page, total: total);
 }
 }

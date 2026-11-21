@@ -396,6 +396,52 @@ void main() {
       expect(fromString.avatar, 'https://img.example/avatar.jpg');
     });
 
+    test('Celebrity.fromDetailJson parses the probed detail shape', () {
+      final c = Celebrity.fromDetailJson(<String, dynamic>{
+        'id': 1054521,
+        'title': '蒂姆·罗宾斯',
+        'latin_title': 'Tim Robbins',
+        'followed_count': 1234,
+        'cover': <String, dynamic>{
+          'large': <String, dynamic>{'url': 'https://img.example/large.jpg', 'width': 400, 'height': 500},
+          'normal': <String, dynamic>{'url': 'https://img.example/normal.jpg', 'width': 200, 'height': 250},
+        },
+        'extra': <String, dynamic>{
+          'header_img': null,
+          'short_info': '演员 导演 制片人 / 肖申克的救赎',
+          'info': [
+            ['性别', '男'],
+            ['出生日期', '1958年10月16日'],
+            ['出生地', '美国,加利福尼亚州,西科维纳'],
+          ],
+        },
+      });
+      expect(c.id, '1054521');
+      expect(c.name, '蒂姆·罗宾斯');
+      expect(c.avatar, 'https://img.example/large.jpg');
+      expect(c.latinTitle, 'Tim Robbins');
+      expect(c.shortInfo, '演员 导演 制片人 / 肖申克的救赎');
+      expect(c.followedCount, 1234);
+      expect(c.info, [('性别', '男'), ('出生日期', '1958年10月16日'), ('出生地', '美国,加利福尼亚州,西科维纳')]);
+    });
+
+    test('CelebrityWork reads the subject from work, not the wrapper', () {
+      final work = CelebrityWork.fromJson(<String, dynamic>{
+        'roles': ['演员 (饰 安迪·杜佛兰 Andy Dufresne)'],
+        'work': <String, dynamic>{
+          'id': '1292052',
+          'type': 'movie',
+          'title': '肖申克的救赎',
+          'year': '1994',
+          'rating': <String, dynamic>{'value': 9.7, 'max': 10, 'count': 3354509},
+        },
+      });
+      expect(work.subject.id, '1292052');
+      expect(work.subject.title, '肖申克的救赎');
+      expect(work.subject.year, '1994');
+      expect(work.roles, ['演员 (饰 安迪·杜佛兰 Andy Dufresne)']);
+    });
+
     test('ShortComment parses the commenter avatar', () {
       final c = ShortComment.fromJson(<String, dynamic>{
         'comment': '好看',

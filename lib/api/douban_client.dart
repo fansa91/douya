@@ -857,16 +857,25 @@ class RealDoubanRepository implements DoubanRepository {
   Future<CelebrityDetail> fetchCelebrity(String id) async {
     final results = await Future.wait([
       _client.signedGet('/api/v2/celebrity/$id'),
-      _client.signedGet('/api/v2/celebrity/$id/works', {'start': 0, 'count': 20}),
+      fetchCelebrityWorks(id, start: 0, count: 20),
     ]);
-    final detail = results[0];
-    final works = results[1];
+    final detail = results[0] as Map<String, dynamic>;
+    final works = results[1] as CelebrityWorksResult;
     return CelebrityDetail(
-      celebrity: Celebrity(
-        id: id,
-        name: (detail['title'] as String?) ?? '',
-      ),
-      works: _parseList(works['works'], (j) => Subject.fromJson(j)),
+      celebrity: Celebrity.fromDetailJson(detail),
+      works: works.works,
+      worksTotal: works.total,
+    );
+  }
+
+  @override
+  Future<CelebrityWorksResult> fetchCelebrityWorks(String id, {int start = 0, int count = 20}) async {
+    final data = await _client.signedGet('/api/v2/celebrity/$id/works', {'start': start, 'count': count});
+    return CelebrityWorksResult(
+      // Pages overlap by one entry (probed 2026-11-21: start=0 and
+      // start=20 share one work), so callers dedupe by subject id.
+      works: _parseList(data['works'], CelebrityWork.fromJson),
+      total: (data['total'] as num?)?.toInt() ?? 0,
     );
   }
 }

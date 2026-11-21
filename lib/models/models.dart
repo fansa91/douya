@@ -700,6 +700,10 @@ class Celebrity {
     this.avatar,
     this.character,
     this.roles = const [],
+    this.latinTitle,
+    this.shortInfo,
+    this.info = const [],
+    this.followedCount = 0,
   });
 
   final String id;
@@ -707,6 +711,19 @@ class Celebrity {
   final String? avatar;
   final String? character;
   final List<String> roles;
+
+  /// English name (latin_title), e.g. "Tim Robbins".
+  final String? latinTitle;
+
+  /// Short line from extra.short_info: professions + notable works.
+  final String? shortInfo;
+
+  /// Bio key/value pairs from extra.info: [[label, value], ...]
+  /// (gender, birthday, birthplace, ...).
+  final List<(String, String)> info;
+
+  /// followed_count.
+  final int followedCount;
 
   factory Celebrity.fromJson(Map<String, dynamic> json) {
     // The celebrities endpoint returns {large, normal} maps; other
@@ -726,16 +743,86 @@ class Celebrity {
       roles: ((json['roles'] as List?) ?? []).map((e) => '$e').toList(),
     );
   }
+
+  /// Parse a /celebrity/{id} detail response (probed 2026-11-21).
+  /// The detail carries no flat gender/birthday fields: the bio
+  /// lives in extra.info as [label, value] pairs, the photo in
+  /// cover ({large, normal}) or cover_img ({url}).
+  factory Celebrity.fromDetailJson(Map<String, dynamic> json) {
+    String? avatarUrl;
+    final cover = json['cover'];
+    if (cover is Map) {
+      avatarUrl = imageUrlOf(cover['large']) ?? imageUrlOf(cover['normal']);
+    }
+    final coverImg = json['cover_img'];
+    if (avatarUrl == null && coverImg is Map) {
+      avatarUrl = imageUrlOf(coverImg['url']);
+    }
+    String? shortInfo;
+    final info = <(String, String)>[];
+    final extra = json['extra'];
+    if (extra is Map) {
+      shortInfo = extra['short_info'] as String?;
+      final rawInfo = extra['info'];
+      if (rawInfo is List) {
+        for (final pair in rawInfo) {
+          if (pair is List && pair.length >= 2) {
+            info.add(('${pair[0]}', '${pair[1]}'));
+          }
+        }
+      }
+    }
+    return Celebrity(
+      id: '${json['id'] ?? ''}',
+      name: (json['title'] as String?) ?? '',
+      avatar: avatarUrl,
+      latinTitle: json['latin_title'] as String?,
+      shortInfo: shortInfo,
+      info: info,
+      followedCount: (json['followed_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// One entry of /celebrity/{id}/works: the entry is NOT a flat
+/// subject — it is {roles, work}, where work is the subject and
+/// roles names the celebrity's part in it (probed 2026-11-21).
+/// The old parser read the wrapper as a Subject, so id/title were
+/// empty and the works list was blank on real data.
+class CelebrityWork {
+  const CelebrityWork({required this.subject, this.roles = const []});
+
+  final Subject subject;
+  final List<String> roles;
+
+  factory CelebrityWork.fromJson(Map<String, dynamic> json) {
+    final work = json['work'];
+    return CelebrityWork(
+      subject: work is Map ? Subject.fromJson(work.cast<String, dynamic>()) : const Subject(id: '', type: '', title: ''),
+      roles: ((json['roles'] as List?) ?? []).map((e) => '$e').toList(),
+    );
+  }
+}
+
+class CelebrityWorksResult {
+  const CelebrityWorksResult({this.works = const [], this.total = 0});
+
+  final List<CelebrityWork> works;
+  final int total;
 }
 
 class CelebrityDetail {
   const CelebrityDetail({
     required this.celebrity,
     this.works = const [],
+    this.worksTotal = 0,
   });
 
   final Celebrity celebrity;
-  final List<Subject> works;
+  final List<CelebrityWork> works;
+
+  /// Total for the paged works list (113 for Tim Robbins).
+  final int worksTotal;
 }
 
 class UserProfile {
