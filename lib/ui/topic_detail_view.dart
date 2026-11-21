@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/gestures.dart';
@@ -6,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'breakpoints.dart';
+import '../data/comment_threads.dart';
 import '../data/local_lists.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
@@ -182,17 +185,270 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   /// Show only the topic author's replies.
   bool _onlyAuthor = false;
 
+  /// Threaded (楼中楼) mode, persisted locally. Flat is the default.
+  /// Only applies to the 最新 tab: 热门 is always flat, and 只看楼主
+  /// forces flat as well.
+  bool _threaded = false;
+
+  /// Roots whose children are expanded past the first two. Keyed by
+  /// the root comment object; the list preserves instances across
+  /// load-more appends, so the set survives a rebuild. New replies
+  /// only grow a root's count — they never auto-expand it.
+  final _expandedThreads = <TopicComment>{};
+
+  /// The comment a tap on @ (or a quote) located, briefly
+  /// highlighted so the eye finds it.
+  TopicComment? _highlighted;
+  Timer? _highlightTimer;
+
+  /// GlobalKey per comment row, for locating it on an @ tap. Keyed
+  /// by the comment id, or by the comment object when it has no id.
+  /// Only the main list rows carry keys (the conversation sheet
+  /// renders the same comments again, and a key can only attach to
+  /// one widget).
+  final _rowKeys = <Object, GlobalKey>{};
+
+  /// The comment whose conversation is shown in the desktop right
+  /// column (null = the normal reply list). Mobile uses a bottom
+  /// sheet instead, so this is only read in the wide layout.
+  TopicComment? _conversation;
+
+  /// The topic author's id, for the 楼主 badge in conversation
+  /// rows. Set when the detail loads.
+  String _topicAuthorId = '';
+
+  /// Whether the narrow (single-column) layout is active, set by
+  /// the LayoutBuilder in build. 查看对话 reads it to choose a
+  /// bottom sheet (narrow) or the right column (wide).
+  bool _isNarrow = true;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _threaded = LocalLists.instance.threadedComments;
   }
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  GlobalKey _keyFor(TopicComment c) =>
+      _rowKeys.putIfAbsent(c.id ?? c, () => GlobalKey());
+
+  void _setThreaded(bool value) {
+    setState(() => _threaded = value);
+    LocalLists.instance.setThreadedComments(value);
+  }
+
+  void _setHighlight(TopicComment c) {
+    _highlightTimer?.cancel();
+    setState(() => _highlighted = c);
+    _highlightTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _highlighted = null);
+    });
+  }
+
+  /// Scroll the @ target into view and highlight it. The target is
+  /// always in the same thread as the reply that was tapped, so
+  /// expanding that thread (when collapsed) is enough to build it.
+  void _locateComment(TopicComment target) {
+    final threads = buildCommentThreads(_comments);
+    CommentThread? containing;
+    for (final t in threads) {
+      if (identical(t.root, target) ||
+          t.children.any((ch) => identical(ch.comment, target))) {
+        containing = t;
+        break;
+      }
+    }
+    final thread = containing;
+    if (thread != null) {
+      final root = thread.root;
+      if (!identical(root, target) && !_expandedThreads.contains(root)) {
+        setState(() => _expandedThreads.add(root));
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ctx = _keyFor(target).currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+        _setHighlight(target);
+      }
+    });
+  }
+
+  /// The conversation around [current]: the comment it answers,
+  /// itself, and the replies to it. Usable even when ids are
+  /// incomplete: the parent falls back to the embedded ref_comment
+  /// (the quote block), and replies to an id-less comment match by
+  /// author + text of their embedded ref.
+  ({TopicComment? parent, List<TopicComment> replies}) _conversationFor(
+    TopicComment current,
+  ) {
+    TopicComment? parent;
+    if (current.refCommentId != null) {
+      for (final c in _comments) {
+        if (c.id == current.refCommentId) {
+          parent = c;
+          break;
+        }
+      }
+    }
+    parent ??= current.refComment;
+    final replies = <TopicComment>[];
+    if (current.id != null) {
+      replies.addAll(_comments.where((c) => c.refCommentId == current.id));
+    } else {
+      replies.addAll(
+        _comments.where(
+          (c) =>
+              c.refComment != null &&
+              c.refComment!.authorName == current.authorName &&
+              c.refComment!.text == current.text,
+        ),
+      );
+    }
+    return (parent: parent, replies: replies);
+  }
+
+  /// Open the conversation around [c]: a bottom sheet on narrow
+  /// panes, the right column on wide ones.
+  void _showConversation(TopicComment c) {
+    if (_isNarrow) {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.3,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) => _conversationSheet(c, scrollController),
+        ),
+      );
+    } else {
+      setState(() => _conversation = c);
+    }
+  }
+
+  /// The conversation as a bottom sheet (narrow panes): the
+  /// replied-to comment, the current one, and its replies, in a
+  /// scrollable list with a drag handle.
+  Widget _conversationSheet(TopicComment c, ScrollController scrollController) {
+    final conv = _conversationFor(c);
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.outlineVariant,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              const Text('查看对话', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: '关闭',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(16),
+            children: _conversationChildren(c, conv.parent, conv.replies),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The conversation as the desktop right column (wide panes):
+  /// a back button to the reply list, then the same three sections
+  /// as the sheet.
+  Widget _conversationColumn(TopicDetail detail, TopicComment c) {
+    final conv = _conversationFor(c);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: '返回回应列表',
+                onPressed: () => setState(() => _conversation = null),
+              ),
+              const Text('查看对话', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: _conversationChildren(c, conv.parent, conv.replies),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The three sections of a conversation: the replied-to comment,
+  /// the current comment, and the replies to it. The current one
+  /// is highlighted. Rows here carry no GlobalKey (the same
+  /// comments are already keyed in the main list).
+  List<Widget> _conversationChildren(
+    TopicComment current,
+    TopicComment? parent,
+    List<TopicComment> replies,
+  ) {
+    final floors = {for (var i = 0; i < _comments.length; i++) _comments[i]: i + 1};
+    return [
+      if (parent != null) ...[
+        _sectionLabel('被回复的评论'),
+        _commentRow(context, parent, floors[parent], _topicAuthorId),
+        const SizedBox(height: 8),
+      ],
+      _sectionLabel('当前评论'),
+      _commentRow(context, current, floors[current], _topicAuthorId),
+      if (replies.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        _sectionLabel('对当前评论的回复（${replies.length}）'),
+        for (final r in replies) _commentRow(context, r, floors[r], _topicAuthorId),
+      ] else ...[
+        const SizedBox(height: 8),
+        Text('暂无回复', style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ];
+  }
+
+  Widget _sectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+    );
   }
 
   void _onScroll() {
@@ -240,6 +496,10 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
       _onlyAuthor = false;
       _tab = 0;
       _tabController.index = 0;
+      _expandedThreads.clear();
+      _highlighted = null;
+      _rowKeys.clear();
+      _conversation = null;
     }
   }
 
@@ -247,6 +507,9 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
     setState(() {
       _future = widget.repository.fetchTopic(widget.topicId);
       _loadedId = '';
+      _expandedThreads.clear();
+      _highlighted = null;
+      _conversation = null;
     });
   }
 
@@ -371,6 +634,7 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
           _loadedId = detail.topic.id;
           _comments = List.of(detail.comments);
           _total = detail.commentsTotal > 0 ? detail.commentsTotal : detail.topic.commentsCount;
+          _topicAuthorId = detail.topic.authorId;
           _loadingMore = false;
           _loadMoreFailed = false;
           // Notify the host page after this build finishes: setting
@@ -403,7 +667,12 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
         // body has scrolled away.
         return LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < Breakpoints.paneSplit) {
+            // Remember which layout is active, so 查看对话 knows
+            // whether to open a bottom sheet (narrow) or the right
+            // column (wide). A plain field write, not setState:
+            // it is only read by tap handlers, after build.
+            _isNarrow = constraints.maxWidth < Breakpoints.paneSplit;
+            if (_isNarrow) {
               return Stack(
                 children: [
                   CustomScrollView(
@@ -480,28 +749,30 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
                   const VerticalDivider(width: 1),
                   SizedBox(
                     width: rightWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: _tabBarRow(detail, replyTitle),
-                        ),
-                        const Divider(height: 1),
-                        Expanded(
-                          child: CustomScrollView(
-                            slivers: [
-                              SliverPadding(
-                                padding: const EdgeInsets.all(16),
-                                sliver: SliverMainAxisGroup(
-                                  slivers: _tabContentSlivers(context, detail, visible),
+                    child: _conversation != null
+                        ? _conversationColumn(detail, _conversation!)
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                child: _tabBarRow(detail, replyTitle),
+                              ),
+                              const Divider(height: 1),
+                              Expanded(
+                                child: CustomScrollView(
+                                  slivers: [
+                                    SliverPadding(
+                                      padding: const EdgeInsets.all(16),
+                                      sliver: SliverMainAxisGroup(
+                                        slivers: _tabContentSlivers(context, detail, visible),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -512,11 +783,11 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
     );
   }
 
-  /// The sticky tab row: the reply count, 最新 / 热门, plus the
-  /// 只看楼主 toggle, which applies to both tabs. The count used to
-  /// be its own line above this row; merging it in saves a row of
-  /// height. On mobile this row is pinned by a SliverPersistent-
-  /// Header; on desktop it sits in the pinned header of the right
+  /// The sticky tab row: the reply count, 最新 / 热门, plus a 筛选
+  /// menu holding 只看楼主 and 楼中楼. The row used to carry the
+  /// 只看楼主 chip directly; with the mode switch it would get
+  /// crowded, so both toggles live in the menu and the row keeps
+  /// only the tabs and the menu entry.
   /// column. [rowKey] is the mobile row only, so 跳到回应 can
   /// scroll it into view.
   Widget _tabBarRow(TopicDetail detail, String replyTitle, {Key? rowKey}) {
@@ -532,14 +803,30 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
             tabs: const [Tab(text: '最新'), Tab(text: '热门')],
           ),
         ),
-        if (detail.topic.authorId.isNotEmpty)
-          FilterChip(
-            label: const Text('只看楼主'),
-            selected: _onlyAuthor,
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            onSelected: (v) => setState(() => _onlyAuthor = v),
-          ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.filter_list),
+          tooltip: '筛选',
+          onSelected: (value) {
+            if (value == 'author') {
+              setState(() => _onlyAuthor = !_onlyAuthor);
+            } else if (value == 'threaded') {
+              _setThreaded(!_threaded);
+            }
+          },
+          itemBuilder: (context) => [
+            if (detail.topic.authorId.isNotEmpty)
+              CheckedPopupMenuItem<String>(
+                value: 'author',
+                checked: _onlyAuthor,
+                child: const Text('只看楼主'),
+              ),
+            CheckedPopupMenuItem<String>(
+              value: 'threaded',
+              checked: _threaded,
+              child: const Text('楼中楼'),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -573,7 +860,8 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
           ),
         SliverList.builder(
           itemCount: hot.length,
-          itemBuilder: (context, i) => _commentRow(context, hot[i].$2, null, detail.topic.authorId),
+          itemBuilder: (context, i) =>
+              _commentRow(context, hot[i].$2, null, detail.topic.authorId, rowKey: _keyFor(hot[i].$2)),
         ),
         if (!fromApi && _comments.length < _total)
           SliverToBoxAdapter(
@@ -587,6 +875,26 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
           ),
       ];
     }
+    // Threaded (楼中楼) on the 最新 tab only: 热门 is always flat,
+    // and 只看楼主 forces flat. Roots in time order, children
+    // nested under them; the footer stays for load-more, and new
+    // replies only grow a root's count (expanded state is kept by
+    // root object, so nothing auto-expands).
+    if (_tab == 0 && _threaded && !_onlyAuthor) {
+      final threads = buildCommentThreads(visible.map((e) => e.$2).toList());
+      if (threads.isEmpty) {
+        return [const SliverToBoxAdapter(child: EmptyState(message: '暂无回复'))];
+      }
+      final floors = {for (final (floor, c) in visible) c: floor};
+      return [
+        SliverList.builder(
+          itemCount: threads.length,
+          itemBuilder: (context, i) =>
+              _threadRow(context, threads[i], floors, detail.topic.authorId),
+        ),
+        if (_total > 0) SliverToBoxAdapter(child: _commentsFooter()),
+      ];
+    }
     return [
       if (visible.isEmpty)
         SliverToBoxAdapter(child: EmptyState(message: _onlyAuthor ? '楼主在已加载的回应中暂无发言' : '暂无回复'))
@@ -595,11 +903,91 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
           itemCount: visible.length,
           itemBuilder: (context, i) {
             final (floor, c) = visible[i];
-            return _commentRow(context, c, floor, detail.topic.authorId);
+            return _commentRow(context, c, floor, detail.topic.authorId, rowKey: _keyFor(c));
           },
         ),
       if (visible.isNotEmpty || _total > 0) SliverToBoxAdapter(child: _commentsFooter()),
     ];
+  }
+
+  /// One thread: the root row, then its replies in a child area
+  /// (left vertical line, smaller avatars, light background). The
+  /// first two replies show by default; the rest sit behind
+  /// 展开其余 N 条回复. The whole thread is one sliver item, so the
+  /// footer only mounts when a thread scrolls near — the same lazy
+  /// rule as the flat list.
+  Widget _threadRow(
+    BuildContext context,
+    CommentThread thread,
+    Map<TopicComment, int> floors,
+    String topicAuthorId,
+  ) {
+    final root = thread.root;
+    final expanded = _expandedThreads.contains(root);
+    final shown =
+        expanded ? thread.children : thread.children.take(2).toList();
+    final hidden = thread.children.length - shown.length;
+    return Column(
+      children: [
+        _commentRow(
+          context,
+          root,
+          floors[root],
+          topicAuthorId,
+          showDivider: false,
+          rowKey: _keyFor(root),
+        ),
+        if (thread.children.isNotEmpty)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Indent 16dp, but drop it when the body would fall
+              // under ~200dp wide; the vertical line stays either way.
+              final indent = constraints.maxWidth - 16 < 200 ? 0.0 : 16.0;
+              return Padding(
+                padding: EdgeInsets.only(left: indent, top: 4),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        width: 2,
+                      ),
+                    ),
+                    color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  ),
+                  padding: const EdgeInsets.only(left: 10, top: 4, bottom: 4),
+                  child: Column(
+                    children: [
+                      for (final child in shown)
+                        _commentRow(
+                          context,
+                          child.comment,
+                          floors[child.comment],
+                          topicAuthorId,
+                          avatarRadius: 12,
+                          replyTo: child.replyTo,
+                          isThreadChild: true,
+                          showDivider: false,
+                          rowKey: _keyFor(child.comment),
+                        ),
+                      if (hidden > 0)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () =>
+                                setState(() => _expandedThreads.add(root)),
+                            child: Text('展开其余 $hidden 条回复'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        const Divider(height: 1),
+      ],
+    );
   }
 
   /// Flat header, no Card: the title, then the author row split
@@ -932,11 +1320,11 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   /// Avatar with the same fallback as the feed cards: a real
   /// avatar URL when the payload carries one, a person icon when
   /// it does not (the topic/comment payloads do not always).
-  Widget _authorAvatar(String? url) {
+  Widget _authorAvatar(String? url, {double radius = 16}) {
     if (url != null && url.isNotEmpty) {
-      return CircleAvatar(radius: 16, backgroundImage: doubanImageProvider(url));
+      return CircleAvatar(radius: radius, backgroundImage: doubanImageProvider(url));
     }
-    return const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16));
+    return CircleAvatar(radius: radius, child: Icon(Icons.person, size: radius));
   }
 
   /// Flat reply row (no Card, no ListTile — its trailing would
@@ -944,85 +1332,169 @@ class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProv
   /// floor number, "时间 · IP属地" line, an indented quote block
   /// when the reply answers another comment, body, and the like
   /// count at the bottom right.
-  Widget _commentRow(BuildContext context, TopicComment c, int? floor, String topicAuthorId) {
+  ///
+  /// [avatarRadius] shrinks the avatar for thread children;
+  /// [replyTo] prepends a tappable "回复 @某某" to the body (a reply
+  /// to another reply, not to the root); [isThreadChild] adds a
+  /// 查看对话 button; [rowKey] is the main list's GlobalKey for
+  /// locating the row (the conversation sheet passes none, so the
+  /// same comment never carries two keys at once). A located row
+  /// is briefly highlighted.
+  Widget _commentRow(
+    BuildContext context,
+    TopicComment c,
+    int? floor,
+    String topicAuthorId, {
+    double avatarRadius = 16,
+    TopicComment? replyTo,
+    bool isThreadChild = false,
+    bool showDivider = true,
+    Key? rowKey,
+  }) {
     final meta = [
       if (c.createTime.isNotEmpty) c.createTime,
       if (c.ipLocation != null && c.ipLocation!.isNotEmpty) 'IP属地：${c.ipLocation}',
     ].join(' · ');
     final isAuthor = c.authorId.isNotEmpty && c.authorId == topicAuthorId;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _authorAvatar(c.authorAvatar),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final highlighted = identical(_highlighted, c);
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _authorAvatar(c.authorAvatar, radius: avatarRadius),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(child: Text(c.authorName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                        if (isAuthor) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text('楼主', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onPrimaryContainer)),
-                          ),
-                        ],
-                        if (floor != null) ...[
-                          const Spacer(),
-                          Text('$floor楼', style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ],
-                    ),
-                    if (meta.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(meta, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                    if (c.refComment != null) ...[
-                      const SizedBox(height: 6),
+                    Flexible(child: Text(c.authorName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    if (isAuthor) ...[
+                      const SizedBox(width: 6),
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(6),
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text(
-                          '${c.refComment!.authorName}：${c.refComment!.text}',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                        child: Text('楼主', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onPrimaryContainer)),
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    SelectableText(c.text),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Spacer(),
-                        const Icon(Icons.thumb_up_outlined, size: 14),
-                        const SizedBox(width: 4),
-                        Text('${c.voteCount}', style: Theme.of(context).textTheme.bodySmall),
-                      ],
-                    ),
+                    if (floor != null) ...[
+                      const Spacer(),
+                      Text('$floor楼', style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ],
                 ),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(meta, style: Theme.of(context).textTheme.bodySmall),
+                ],
+                if (c.refComment != null) ...[
+                  const SizedBox(height: 6),
+                  _quoteBlock(context, c),
+                ],
+                const SizedBox(height: 4),
+                if (replyTo != null)
+                  SelectableText.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '回复 @${replyTo.authorName} ',
+                          style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () => _locateComment(replyTo),
+                        ),
+                        TextSpan(text: c.text),
+                      ],
+                    ),
+                  )
+                else
+                  SelectableText(c.text),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (isThreadChild)
+                      TextButton(
+                        onPressed: () => _showConversation(c),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('查看对话', style: TextStyle(fontSize: 12)),
+                      ),
+                    const Spacer(),
+                    const Icon(Icons.thumb_up_outlined, size: 14),
+                    const SizedBox(width: 4),
+                    Text('${c.voteCount}', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    final body = highlighted
+        ? Container(
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
+            child: row,
+          )
+        : row;
+    return Column(
+      key: rowKey,
+      children: [
+        body,
+        if (showDivider) const Divider(height: 1),
+      ],
+    );
+  }
+
+  /// The quoted reply block. Tappable in flat mode: it opens the
+  /// conversation view (the replied-to comment, this comment, and
+  /// its replies). The 查看对话 hint makes the tap discoverable.
+  Widget _quoteBlock(BuildContext context, TopicComment c) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(6),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showConversation(c),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${c.refComment!.authorName}：${c.refComment!.text}',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    '查看对话',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
-      ],
+      ),
     );
   }
 }

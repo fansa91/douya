@@ -79,6 +79,7 @@ class LocalLists extends ChangeNotifier {
   static const _myUserIdKey = 'my_user_id';
   static const _recentUsersKey = 'recent_users';
   static const _readFeedIdsKey = 'read_feed_ids';
+  static const _threadedCommentsKey = 'topic_threaded_comments';
 
   static const maxFavoriteGroups = 30;
   static const maxFavoriteTopics = 30;
@@ -93,6 +94,10 @@ class LocalLists extends ChangeNotifier {
   /// Feed items the user has opened, newest first. The card shows
   /// a read title in a muted colour. Only ids are stored.
   List<String> readFeedIds = [];
+
+  /// Topic replies shown as threads (楼中楼) instead of the flat
+  /// time-ordered list. Flat is the default; the choice persists.
+  bool threadedComments = false;
 
   bool isFeedRead(String id) => readFeedIds.contains(id);
 
@@ -121,7 +126,16 @@ class LocalLists extends ChangeNotifier {
       prefs.getString(_recentUsersKey),
       RecentUser.fromJson,
     );
+    threadedComments = prefs.getBool(_threadedCommentsKey) ?? false;
     notifyListeners();
+  }
+
+  /// Persist the thread-mode choice for topic replies.
+  Future<void> setThreadedComments(bool value) async {
+    threadedComments = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_threadedCommentsKey, value);
   }
 
   Future<void> toggleFavoriteGroup({

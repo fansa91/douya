@@ -1223,7 +1223,9 @@ void main() {
     expect(find.text('楼主'), findsOneWidget);
     expect(find.text('路人1：请问还可以看房吗？'), findsOneWidget);
     expect(find.text('1楼'), findsOneWidget);
-    expect(find.text('只看楼主'), findsOneWidget);
+    // Step 5: 只看楼主 moved into the 筛选 menu; the row keeps
+    // only the tabs and the menu entry.
+    expect(find.byIcon(Icons.filter_list), findsOneWidget);
     await tester.tap(find.text('热门'));
     await tester.pumpAndSettle();
     expect(find.text('路人3'), findsOneWidget);
@@ -1282,12 +1284,15 @@ void main() {
   // Step 3: 只看楼主 keeps only the topic author's replies.
   // '房东' appears twice: the header's author line and the author's
   // own reply (the header used to merge the name into one string).
+  // Step 5: the toggle lives in the 筛选 menu now.
   testWidgets('topic detail only-author filter', (tester) async {
     await _pumpPage(
       tester,
       const TopicDetailPage(repository: _repository, topicId: '504122375'),
       const Size(390, 3000),
     );
+    await tester.tap(find.byIcon(Icons.filter_list));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('只看楼主'));
     await tester.pumpAndSettle();
     expect(find.text('房东'), findsNWidgets(2));
