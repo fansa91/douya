@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'breakpoints.dart';
+import '../data/cities.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'faceted_view.dart';
 import 'landing_page.dart';
+import 'showing_filter.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
@@ -141,6 +144,11 @@ class _BrowsePageState extends State<BrowsePage> {
   bool _loadMoreFailed = false;
   String? _error;
 
+  /// Showing (movie/正在热映) filter state. The city is persisted
+  /// (SharedPreferences) and restored on start; the other filters
+  /// live only for this page session.
+  ShowingFilters _showing = const ShowingFilters();
+
   /// Sequence of the currently valid request: bumping it in _load
   /// invalidates every in-flight request, so a slow old response
   /// can never overwrite a newer list.
@@ -159,6 +167,23 @@ class _BrowsePageState extends State<BrowsePage> {
     }
     final filters = browseFilters[_category]!;
     _filter = filters.any((f) => f.id == widget.initialFilter) ? widget.initialFilter! : filters.first.id;
+    _initShowing();
+  }
+
+  /// Restores the saved showing city, then loads the list. The
+  /// first load waits for the city so a saved city goes straight
+  /// to the city list instead of flashing the national list.
+  Future<void> _initShowing() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt('showing_city_id');
+      if (saved != null && showingCityById(saved) != null) {
+        _showing = _showing.copyWith(cityId: saved);
+      }
+    } catch (_) {
+      // Storage failure: fall back to no city (national list).
+    }
+    if (!mounted) return;
     _load();
   }
 
@@ -177,6 +202,12 @@ class _BrowsePageState extends State<BrowsePage> {
         _loadMoreFailed = false;
       });
       return;
+    }
+    // Showing with a city: the Rexxar showing endpoint, all pages
+    // up front (the list is small), then the client-side area
+    // filter. Without a city the existing national list is used.
+    if (_category == 'movie' && _filter == 'showing' && _showing.cityId != null) {
+      return _loadShowing(seq);
     }
     setState(() {
       _loading = true;
@@ -206,7 +237,80 @@ class _BrowsePageState extends State<BrowsePage> {
     }
   }
 
+  /// Loads every page of the city showing list, then applies the
+  /// client-side area filter. All pages are fetched because the
+  /// filtered count ("共 N 部") is only exact on the full set, and
+  /// the list is small (at most ~86 films, ~5 pages).
+  Future<void> _loadShowing(int seq) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _items = [];
+      _total = 0;
+      _loadingMore = false;
+      _loadMoreFailed = false;
+    });
+    try {
+      var all = <Subject>[];
+      var total = 0;
+      var start = 0;
+      while (true) {
+        final page = await widget.repository.fetchMovieShowing(
+          sort: _showing.sort,
+          playable: _showing.playable,
+          scoreRange: _showing.scoreRange,
+          locId: _showing.cityId!,
+          start: start,
+          count: 20,
+        );
+        if (!mounted || seq != _seq) return;
+        total = page.total;
+        all = [...all, ...page.items];
+        start += page.items.length;
+        if (page.items.isEmpty || all.length >= total) break;
+      }
+      final filtered = all.where((s) => subjectMatchesArea(s, _showing.area)).toList();
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _items = filtered;
+        _total = filtered.length;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('showing load failed: $e');
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
+  /// Applies a showing filter change: updates the state, persists
+  /// the city, and reloads. The city is the only filter stored.
+  Future<void> _applyShowing(ShowingFilters next) async {
+    final cityChanged = next.cityId != _showing.cityId;
+    setState(() => _showing = next);
+    if (cityChanged) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (next.cityId == null) {
+          await prefs.remove('showing_city_id');
+        } else {
+          await prefs.setInt('showing_city_id', next.cityId!);
+        }
+      } catch (_) {
+        // Storage failure: the city still works for this session.
+      }
+      if (!mounted) return;
+    }
+    _load();
+  }
+
   Future<void> _loadMore() async {
+    // Showing with a city loads every page up front, so there is
+    // nothing more to load.
+    if (_category == 'movie' && _filter == 'showing' && _showing.cityId != null) return;
     if (_loadingMore || _items.length >= _total) return;
     final seq = _seq;
     setState(() {
@@ -326,6 +430,32 @@ class _BrowsePageState extends State<BrowsePage> {
               ],
             ]),
           ),
+        // Showing filter bar (movie/正在热映 only). Without a city
+        // the existing national list is shown with a prompt; with
+        // one, the city list is filtered by the bar.
+        if (_category == 'movie' && _filter == 'showing')
+          LayoutBuilder(builder: (context, c) {
+            final compact = Breakpoints.of(c.maxWidth) == WindowSize.compact;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(_pad, 0, _pad, 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (_showing.cityId == null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '选择城市查看本地热映并筛选',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ShowingFilterBar(
+                  filters: _showing,
+                  compact: compact,
+                  total: _total,
+                  onChanged: _applyShowing,
+                ),
+              ]),
+            );
+          }),
         Expanded(child: _body()),
       ]),
     );

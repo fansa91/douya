@@ -284,6 +284,43 @@ class Subject {
   }
 }
 
+/// Region of a subject, parsed from cardSubtitle ("YYYY / REGION /
+/// genres / ...", the shape the showing endpoint returns, e.g.
+/// "2026 / 美国 / 动作 科幻 冒险 / ..."). Null when the subtitle
+/// does not have that shape (a film must never be hidden because
+/// its region could not be read, so the area filter treats null
+/// as matching every area).
+String? subjectRegion(Subject subject) {
+  final subtitle = subject.cardSubtitle;
+  if (subtitle == null) return null;
+  final parts = subtitle.split(' / ');
+  if (parts.length < 2) return null;
+  if (!RegExp(r'^\d{4}$').hasMatch(parts[0].trim())) return null;
+  final region = parts[1].trim();
+  return region.isEmpty ? null : region;
+}
+
+/// Area groups for the showing filter, from the official H5 page's
+/// areas list (全部/华语/欧美/韩国/日本). The Rexxar showing
+/// endpoint ignores the area parameter (verified 2026-11-21), so
+/// the filter runs client-side on [subjectRegion]. 欧美 is an
+/// approximation: every region that is not Chinese, Korean or
+/// Japanese (the now-playing list is dominated by Chinese and
+/// Western films; a rare third-region film lands in 欧美 rather
+/// than being dropped).
+bool subjectMatchesArea(Subject subject, String area) {
+  if (area == '全部') return true;
+  final region = subjectRegion(subject);
+  if (region == null) return true;
+  if (area == '华语') {
+    return region.contains('中国') || region == '香港' || region == '台湾';
+  }
+  if (area == '韩国') return region == '韩国';
+  if (area == '日本') return region == '日本';
+  // 欧美: anything that is not Chinese, Korean or Japanese.
+  return !(region.contains('中国') || region == '香港' || region == '台湾' || region == '韩国' || region == '日本');
+}
+
 /// One ranking board from Rexxar
 /// /tag/{tagId}/subject_collection_boards: the `subject_collection`
 /// object inside each board entry. Tag ids verified 2026-10-31:
