@@ -31,7 +31,7 @@ class ImagePreviewPage extends StatefulWidget {
   State<ImagePreviewPage> createState() => _ImagePreviewPageState();
 }
 
-class _ImagePreviewPageState extends State<ImagePreviewPage> {
+class _ImagePreviewPageState extends State<ImagePreviewPage> with SingleTickerProviderStateMixin {
   late final PageController _pageController;
   late int _current;
   bool _menuOpen = false;
@@ -42,6 +42,20 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
   final _imageSizes = <int, Size>{};
   final _imageListeners = <int, (ImageStream, ImageStreamListener)>{};
   bool _saving = false;
+
+  /// Swipe-down-to-dismiss drag: the gallery follows the finger
+  /// and fades; past the threshold (or a fast flick) the page pops,
+  /// otherwise it snaps back. Tracked with a raw Listener, not a
+  /// gesture recognizer, so it never fights PhotoView's pan/zoom or
+  /// the PageView's horizontal paging in the arena.
+  double _dragOffset = 0;
+  int? _dragPointer;
+  Offset _dragStart = Offset.zero;
+  bool _dragLocked = false;
+  bool _dragActive = false;
+  VelocityTracker _velocityTracker = VelocityTracker.withKind(PointerDeviceKind.touch);
+  late final AnimationController _snapController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+  Animation<double>? _snapAnimation;
 
   bool get _isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -64,7 +78,104 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
       state.dispose();
     }
     _pageController.dispose();
+    _snapController.dispose();
     super.dispose();
+  }
+
+  /// The current image is at its contained (minimum) scale, so a
+  /// vertical drag is not a pan of a zoomed image. Falls back to
+  /// the scale state when the image size has not resolved yet.
+  bool _isAtMinScale() {
+    final controller = _controllers[_current];
+    final imageSize = _imageSizes[_current];
+    final box = _galleryKey.currentContext?.findRenderObject();
+    if (controller?.scale == null || imageSize == null || box is! RenderBox || !box.hasSize) {
+      return _scaleStates[_current]?.scaleState == PhotoViewScaleState.initial;
+    }
+    final minimum = math.min(box.size.width / imageSize.width, box.size.height / imageSize.height);
+    return controller!.scale! <= minimum * 1.02;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_menuOpen) return;
+    if (_dragPointer != null) {
+      // Second finger (pinch): cancel any dismiss in progress.
+      if (_dragActive) {
+        _dragActive = false;
+        _snapBack();
+      }
+      _dragPointer = null;
+      return;
+    }
+    _snapController.stop();
+    _dragPointer = event.pointer;
+    _dragStart = event.position;
+    _dragLocked = false;
+    _dragActive = false;
+    _velocityTracker = VelocityTracker.withKind(event.kind);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _dragPointer || _menuOpen) return;
+    _velocityTracker.addPosition(event.timeStamp, event.position);
+    if (!_dragLocked) {
+      final dx = event.position.dx - _dragStart.dx;
+      final dy = event.position.dy - _dragStart.dy;
+      if (dy > 12 && dy.abs() > dx.abs() * 1.2 && _isAtMinScale()) {
+        _dragLocked = true;
+        _dragActive = true;
+      } else if (dx.abs() > 12 || dy < -12) {
+        // Horizontal (page swipe) or upward: not a dismiss drag.
+        _dragLocked = true;
+      }
+      if (!_dragActive) return;
+    }
+    if (!_dragActive) return;
+    final dy = event.position.dy - _dragStart.dy;
+    setState(() => _dragOffset = dy.clamp(0.0, double.infinity));
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (event.pointer != _dragPointer) return;
+    _dragPointer = null;
+    if (!_dragActive) return;
+    _dragActive = false;
+    final velocity = _velocityTracker.getVelocity().pixelsPerSecond.dy;
+    if (_dragOffset > 120 || velocity > 600) {
+      _dismiss();
+    } else {
+      _snapBack();
+    }
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _dragPointer) return;
+    _dragPointer = null;
+    if (_dragActive) {
+      _dragActive = false;
+      _snapBack();
+    }
+  }
+
+  void _animateOffsetTo(double target, {required VoidCallback onDone}) {
+    _snapAnimation = Tween<double>(begin: _dragOffset, end: target).animate(
+      CurvedAnimation(parent: _snapController, curve: Curves.easeOut),
+    )..addListener(() {
+        if (mounted) setState(() => _dragOffset = _snapAnimation!.value);
+      });
+    _snapController.forward(from: 0).then((_) {
+      if (mounted) onDone();
+    });
+  }
+
+  void _dismiss() {
+    _animateOffsetTo(MediaQuery.sizeOf(context).height, onDone: () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  void _snapBack() {
+    _animateOffsetTo(0, onDone: () {});
   }
 
   CachedNetworkImageProvider _providerFor(int index) {
@@ -291,10 +402,16 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    // The whole page follows the dismiss drag and fades with it.
+    final opacity = (1 - _dragOffset / 300).clamp(0.0, 1.0);
     return Focus(
       autofocus: true,
       onKeyEvent: _onKeyEvent,
-      child: Scaffold(
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.translate(
+          offset: Offset(0, _dragOffset),
+          child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
           backgroundColor: Colors.black,
@@ -313,6 +430,10 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                   Listener(
                     key: _galleryKey,
                     onPointerSignal: _onPointerSignal,
+                    onPointerDown: _onPointerDown,
+                    onPointerMove: _onPointerMove,
+                    onPointerUp: _onPointerUp,
+                    onPointerCancel: _onPointerCancel,
                     child: GestureDetector(
                       onLongPress: _showMenu,
                       onSecondaryTap: _showMenu,
@@ -348,6 +469,8 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                   if (_saving) const CircularProgressIndicator(color: Colors.white),
                 ],
               ),
+          ),
+        ),
       ),
     );
   }

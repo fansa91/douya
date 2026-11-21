@@ -16,6 +16,7 @@ import 'package:douya/ui/celebrity_page.dart';
 import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/group_topics_view.dart';
 import 'package:douya/ui/home_page.dart';
+import 'package:douya/ui/image_preview_page.dart';
 import 'package:douya/ui/rankings_page.dart';
 import 'package:douya/ui/settings_page.dart';
 import 'package:douya/ui/topic_detail_view.dart';
@@ -25,6 +26,7 @@ import 'package:douya/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Widget smoke tests for the adaptive layouts (task 7): each of the
@@ -1375,6 +1377,79 @@ void main() {
     );
     expect(find.text('作品24'), findsOneWidget);
     expect(find.text('已加载 25 / 25'), findsOneWidget);
+  });
+
+  // Item 3: a long swipe down dismisses the preview; a short slow
+  // drag snaps back and the preview stays. These tests pump manually
+  // instead of pumpAndSettle: the preview's image never resolves in
+  // tests (the cached-network provider does not complete against the
+  // HttpClient stub), so its loading spinner spins forever.
+  testWidgets('image preview swipe down dismisses', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ImagePreviewPage(
+                      urls: ['https://img.example/a.jpg', 'https://img.example/b.jpg'],
+                    ),
+                  ),
+                );
+              },
+              child: const Text('open preview'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open preview'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('1/2'), findsOneWidget);
+    await tester.timedDrag(find.byType(PhotoViewGallery), const Offset(0, 300), const Duration(milliseconds: 300));
+    // Let the dismiss animation (200ms) and the pop transition run.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('1/2'), findsNothing);
+    expect(find.text('open preview'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('image preview short drag snaps back', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ImagePreviewPage(urls: ['https://img.example/a.jpg']),
+                  ),
+                );
+              },
+              child: const Text('open preview'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open preview'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('1/1'), findsOneWidget);
+    await tester.timedDrag(find.byType(PhotoViewGallery), const Offset(0, 50), const Duration(milliseconds: 500));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('1/1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   // Step 4: the group tab has 热门 | 已收藏 segments; the favorites
