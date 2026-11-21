@@ -183,6 +183,9 @@ Widget _header(SubjectDetail detail) {
               if (detail.directors.isNotEmpty) Text('导演：${detail.directors.join(' / ')}'),
               if (detail.actors.isNotEmpty) Text('主演：${detail.actors.join(' / ')}'),
               if (detail.authors.isNotEmpty) Text('${s.type == 'music' ? '歌手' : '作者'}：${detail.authors.join(' / ')}'),
+              if (detail.pubdate != null && detail.pubdate!.isNotEmpty) Text('发行时间：${detail.pubdate}'),
+              if (detail.publisher != null && detail.publisher!.isNotEmpty) Text('出版方：${detail.publisher}'),
+              if (detail.media.isNotEmpty) Text('介质：${detail.media.join(' / ')}'),
               if (_episodesText(detail) != null) Text(_episodesText(detail)!),
               const SizedBox(height: 12),
               if (s.rating != null) RatingText(rating: s.rating!),
@@ -191,6 +194,41 @@ Widget _header(SubjectDetail detail) {
         ),
       ],
     ),
+  );
+}
+
+/// Track list for music: numbered rows with the title and the
+/// duration (mm:ss) when known. Shown after the summary, before the
+/// trailers/celebrities/photos sections (which are empty for music —
+/// those endpoints 404). The number falls back to the position when
+/// the API gives no track number.
+Widget _tracksSection(BuildContext context, SubjectDetail detail) {
+  if (detail.songs.isEmpty) return const SizedBox.shrink();
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SizedBox(height: 16),
+      const Text('曲目', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      for (final entry in detail.songs.asMap().entries)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${entry.value.trackNumber > 0 ? entry.value.trackNumber : entry.key + 1}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              Expanded(child: Text(entry.value.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              if (entry.value.durationLabel != null)
+                Text(entry.value.durationLabel!, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+    ],
   );
 }
 
@@ -808,6 +846,10 @@ class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderS
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _tracksSection(context, detail),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _trailersPreview(context, detail.trailers),
               ),
               Padding(
@@ -957,6 +999,10 @@ class _DesktopDetail extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(detail.summary),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _tracksSection(context, detail),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),

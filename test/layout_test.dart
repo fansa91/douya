@@ -187,6 +187,27 @@ class _SlowBrowseRepo extends FakeDoubanRepository {
       (calls['$category/$filter/$start'] = Completer<BrowseResult>()).future;
 }
 
+/// A music subject detail with a track list, for the music page test.
+class _MusicSubjectRepo extends FakeDoubanRepository {
+  @override
+  Future<SubjectDetail> fetchSubject(String type, String id) async {
+    return const SubjectDetail(
+      subject: Subject(id: '38681100', type: 'music', title: '示例专辑', year: '2024', rating: Rating(value: 8.1, max: 10, count: 1000)),
+      summary: '这是一张示例专辑。',
+      authors: ['示例歌手'],
+      genres: ['民谣'],
+      publisher: '示例唱片',
+      pubdate: '2024-01-01',
+      media: ['数字(Digital)'],
+      songs: [
+        Song(title: '大船', trackNumber: 1, durationSeconds: 245),
+        Song(title: '要去什么地方', trackNumber: 2, durationSeconds: 0),
+        Song(title: '云', trackNumber: 3, durationSeconds: 183),
+      ],
+    );
+  }
+}
+
 /// A celebrity repo with 25 works: the first page (20) comes from
 /// fetchCelebrity, the rest through fetchCelebrityWorks.
 class _PagedCelebrityRepo extends FakeDoubanRepository {
@@ -1377,6 +1398,26 @@ void main() {
     );
     expect(find.text('作品24'), findsOneWidget);
     expect(find.text('已加载 25 / 25'), findsOneWidget);
+  });
+
+  // Item 4: the music detail shows the track list (number, title,
+  // duration when known) and the release info in the header.
+  testWidgets('music detail shows tracks and release info', (tester) async {
+    await _pumpPage(
+      tester,
+      SubjectPage(repository: _MusicSubjectRepo(), type: 'music', id: '38681100'),
+      const Size(390, 3000),
+    );
+    expect(find.text('曲目'), findsOneWidget);
+    expect(find.text('大船'), findsOneWidget);
+    expect(find.text('4:05'), findsOneWidget);
+    expect(find.text('要去什么地方'), findsOneWidget);
+    expect(find.text('云'), findsOneWidget);
+    expect(find.text('3:03'), findsOneWidget);
+    expect(find.text('0:00'), findsNothing);
+    expect(find.text('发行时间：2024-01-01'), findsOneWidget);
+    expect(find.text('出版方：示例唱片'), findsOneWidget);
+    expect(find.text('介质：数字(Digital)'), findsOneWidget);
   });
 
   // Item 3: a long swipe down dismisses the preview; a short slow

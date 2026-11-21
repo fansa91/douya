@@ -361,6 +361,41 @@ class Trailer {
   }
 }
 
+/// One track of a music album, from the detail's `songs` list
+/// (probed 2026-11-21). Duration and track number arrive as
+/// strings; '0' means unknown, so no duration is shown then.
+class Song {
+  const Song({required this.title, this.trackNumber = 0, this.durationSeconds = 0, this.playable = false});
+
+  final String title;
+  final int trackNumber;
+  final int durationSeconds;
+  final bool playable;
+
+  factory Song.fromJson(Map<String, dynamic> json) {
+    int asInt(dynamic v) {
+      if (v is num) return v.toInt();
+      return int.tryParse('$v') ?? 0;
+    }
+
+    final playable = json['playable'];
+    return Song(
+      title: (json['title'] as String?) ?? '',
+      trackNumber: asInt(json['track_number']),
+      durationSeconds: asInt(json['duration']),
+      playable: playable == true || playable == 'True' || playable == 'true',
+    );
+  }
+
+  /// mm:ss, or null when the duration is unknown.
+  String? get durationLabel {
+    if (durationSeconds <= 0) return null;
+    final m = durationSeconds ~/ 60;
+    final s = durationSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
 class SubjectDetail {
   const SubjectDetail({
     required this.subject,
@@ -381,6 +416,10 @@ class SubjectDetail {
     this.doulists = const [],
     this.celebrities = const [],
     this.trailers = const [],
+    this.songs = const [],
+    this.publisher,
+    this.pubdate,
+    this.media = const [],
   });
 
   final Subject subject;
@@ -415,6 +454,18 @@ class SubjectDetail {
   final List<Subject> doulists;
   final List<Celebrity> celebrities;
   final List<Trailer> trailers;
+
+  /// Music only: the album's tracks, from the detail's `songs`
+  /// (the `discs` field is just disc labels like ['1'], not
+  /// tracks). Empty for every other type.
+  final List<Song> songs;
+
+  /// Music/book only: publisher, release date, and media (e.g.
+  /// ['数字(Digital)']). The detail carries no `year` for music,
+  /// so pubdate is the header's date line there.
+  final String? publisher;
+  final String? pubdate;
+  final List<String> media;
 }
 
 /// Search result models. Frodo search responses are card-shaped:

@@ -349,6 +349,10 @@ class RealDoubanRepository implements DoubanRepository {
         [...(celebrities['directors'] as List? ?? []), ...(celebrities['actors'] as List? ?? [])],
         Celebrity.fromJson,
       ),
+      songs: _parseList(detail['songs'], Song.fromJson),
+      publisher: detail['publisher'] is String ? detail['publisher'] as String? : null,
+      pubdate: detail['pubdate'] is String ? detail['pubdate'] as String? : null,
+      media: ((detail['media'] as List?) ?? []).map((e) => '$e').toList(),
     );
   }
 

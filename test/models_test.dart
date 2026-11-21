@@ -442,6 +442,21 @@ void main() {
       expect(work.roles, ['演员 (饰 安迪·杜佛兰 Andy Dufresne)']);
     });
 
+    test('Song parses string numbers and hides a zero duration', () {
+      final withDuration = Song.fromJson(<String, dynamic>{
+        'title': '大船',
+        'track_number': '1',
+        'duration': '245',
+        'playable': 'False',
+      });
+      expect(withDuration.trackNumber, 1);
+      expect(withDuration.durationSeconds, 245);
+      expect(withDuration.durationLabel, '4:05');
+      expect(withDuration.playable, isFalse);
+      final unknown = Song.fromJson(<String, dynamic>{'title': '要去什么地方', 'track_number': '2', 'duration': '0'});
+      expect(unknown.durationLabel, isNull);
+    });
+
     test('ShortComment parses the commenter avatar', () {
       final c = ShortComment.fromJson(<String, dynamic>{
         'comment': '好看',
