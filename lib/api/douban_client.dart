@@ -572,6 +572,39 @@ class RealDoubanRepository implements DoubanRepository {
     return parseLanding(data);
   }
 
+  /// Parses the Rexxar /movie/movie_showing response ({start, count,
+  /// total, items}) into a page of subjects. Lenient: a missing or
+  /// misshaped response yields an empty page, never a throw. Fixture:
+  /// test/fixtures/movie_showing.json (real response, loc_id 108288,
+  /// 2026-11-21).
+  static BrowseResult parseMovieShowing(dynamic data) {
+    if (data is! Map<String, dynamic>) return const BrowseResult();
+    return BrowseResult(
+      items: _parseList(data['items'], (j) => Subject.fromJson(j)),
+      total: (data['total'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<BrowseResult> fetchMovieShowing({
+    String? sort,
+    bool playable = false,
+    String? scoreRange,
+    required int locId,
+    int start = 0,
+    int count = 20,
+  }) async {
+    // Rexxar /movie/movie_showing (unsigned, guest 200, 2026-11-21).
+    // loc_id is required by the server. The movie referer matches
+    // the probe; playable is only honoured as the string 'true'.
+    final params = <String, dynamic>{'loc_id': locId, 'start': start, 'count': count};
+    if (sort != null) params['sort'] = sort;
+    if (playable) params['playable'] = 'true';
+    if (scoreRange != null) params['score_range'] = scoreRange;
+    final data = await _rexxarGet('movie/movie_showing', params);
+    return parseMovieShowing(data);
+  }
+
   @override
   Future<List<Subject>> fetchSearchHots() async {
     // Frodo /search/hots (guest 200, 2026-10-31): subjects[10] are

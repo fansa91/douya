@@ -116,6 +116,22 @@ void main() {
     });
   });
 
+  group('parseMovieShowing', () {
+    test('parses the showing page from the real response (loc_id 108288)', () {
+      final result = RealDoubanRepository.parseMovieShowing(
+        fixture('movie_showing.json'),
+      );
+      expect(result.total, 67);
+      expect(result.items.length, 3);
+      expect(result.items[0].title, '饥饿游戏：收获日出');
+    });
+
+    test('a missing or misshaped response yields an empty page, never a throw', () {
+      expect(RealDoubanRepository.parseMovieShowing({}).total, 0);
+      expect(RealDoubanRepository.parseMovieShowing('nope').items, isEmpty);
+    });
+  });
+
   group('parseRankBoards', () {
     test('parses boards with preview subjects from the real response', () {
       final boards = RealDoubanRepository.parseRankBoards(fixture('rank_boards_tag49.json'));

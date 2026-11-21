@@ -46,6 +46,17 @@ Future<List<HomeSection>> fetchHomeSections() async => const [
     ];
 
 @override
+Future<BrowseResult> fetchMovieShowing({
+  String? sort,
+  bool playable = false,
+  String? scoreRange,
+  required int locId,
+  int start = 0,
+  int count = 20,
+}) async =>
+    const BrowseResult(items: [_shawshank, _honglou], total: 2);
+
+@override
 Future<SubjectDetail> fetchSubject(String type, String id) async {
 return const SubjectDetail(
 subject: _shawshank,

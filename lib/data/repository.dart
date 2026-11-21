@@ -94,6 +94,23 @@ abstract class DoubanRepository {
   /// 播出平台 (tag deep links). A wrong-shaped response returns an
   /// empty list; a network error throws.
   Future<List<LandingGroup>> fetchLanding(String type);
+
+  /// Faceted now-playing list: Rexxar /movie/movie_showing
+  /// (unsigned, guest 200, verified 2026-11-21). `locId` is required
+  /// by the server (missing -> 400 code 113); the other filters are
+  /// optional. Verified: sort (recommend/time/rank) reorders,
+  /// playable=true filters to playable titles, score_range is
+  /// "min,max" (e.g. "8,10"). The area parameter the H5 page shows
+  /// is ignored by this endpoint (every area value returns the
+  /// unfiltered total), so it is deliberately not a parameter here.
+  Future<BrowseResult> fetchMovieShowing({
+    String? sort,
+    bool playable = false,
+    String? scoreRange,
+    required int locId,
+    int start = 0,
+    int count = 20,
+  });
   Future<List<SearchContentItem>> fetchSearchContent(String query, {int start = 0, int count = 20});
   Future<SearchGroupResult> fetchSearchGroups(String query, {int start = 0, int count = 20});
   Future<List<SearchUser>> fetchSearchUsers(String query, {int start = 0, int count = 20});

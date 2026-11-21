@@ -1,0 +1,61 @@
+{
+ "start": 0,
+ "count": 3,
+ "total": 67,
+ "items": [
+  {
+   "id": "36915988",
+   "type": "movie",
+   "title": "饥饿游戏：收获日出",
+   "pic": {
+    "large": "https://img3.doubanio.com/view/photo/m_ratio_poster/public/p2937429510.jpg",
+    "normal": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2937429510.jpg"
+   },
+   "rating": {
+    "count": 0,
+    "max": 10,
+    "star_count": 0,
+    "value": 0
+   },
+   "year": "2026",
+   "card_subtitle": "2026 / 美国 / 动作 科幻 冒险 / 弗朗西斯·劳伦斯 / 约瑟夫·扎达 杰西·普莱蒙",
+   "has_linewatch": false
+  },
+  {
+   "id": "37822528",
+   "type": "movie",
+   "title": "珠穆朗玛：云中彼岸",
+   "pic": {
+    "large": "https://img2.doubanio.com/view/photo/m_ratio_poster/public/p2937280981.jpg",
+    "normal": "https://img2.doubanio.com/view/photo/s_ratio_poster/public/p2937280981.jpg"
+   },
+   "rating": {
+    "count": 17640,
+    "max": 10,
+    "star_count": 4.5,
+    "value": 8.5
+   },
+   "year": "2026",
+   "card_subtitle": "2026 / 美国 中国大陆 尼泊尔 / 纪录片 运动 / 金国威 伊丽莎白·柴·瓦沙瑞莉 / 吉姆·莫里森 希拉莉·尼尔森",
+   "has_linewatch": false
+  },
+  {
+   "id": "35068655",
+   "type": "movie",
+   "title": "试探",
+   "pic": {
+    "large": "https://img9.doubanio.com/view/photo/m_ratio_poster/public/p2937437804.jpg",
+    "normal": "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2937437804.jpg"
+   },
+   "rating": {
+    "count": 0,
+    "max": 10,
+    "star_count": 0,
+    "value": 0
+   },
+   "year": "2026",
+   "card_subtitle": "2026 / 中国大陆 / 悬疑 惊悚 / 侯逍遥 / 冯绍峰 陈雨锶",
+   "has_linewatch": false
+  }
+ ]
+}
