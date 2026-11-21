@@ -1,0 +1,224 @@
+{
+ "feed": [
+  {
+   "type": "category_tags",
+   "module": "category_tags",
+   "title": "热门小组分类",
+   "category_tags": [
+    {
+     "name": "分类_兴趣",
+     "count": 1956,
+     "icon_url": null
+    },
+    {
+     "name": "新组",
+     "count": 100,
+     "icon_url": "https://asset.doubanio.com/cuphead/group-static/pics/tag_icons/ic_xinzu.svg"
+    },
+    {
+     "name": "分类_书影音",
+     "count": 3830,
+     "icon_url": null
+    },
+    {
+     "name": "分类_人文",
+     "count": 1018,
+     "icon_url": null
+    },
+    {
+     "name": "追剧",
+     "count": 5590,
+     "icon_url": "https://asset.doubanio.com/cuphead/group-static/pics/tag_icons/ic_zhuiju.svg"
+    },
+    {
+     "name": "分类_生活",
+     "count": 5096,
+     "icon_url": null
+    },
+    {
+     "name": "分类_闲趣",
+     "count": 1833,
+     "icon_url": null
+    }
+   ]
+  },
+  {
+   "type": "top_groups",
+   "module": "top20_groups",
+   "title": "本周热门趋势榜Top20",
+   "groups": [
+    {
+     "id": "676486",
+     "name": "哈利波特：魔法觉醒",
+     "avatar": "https://img3.doubanio.com/view/group/sqxs/public/1d76402f25e6c29.jpg",
+     "member_count": 25083,
+     "desc_abstract": "本组提倡攻略求助、玩法交流、抒发个人感想分享游戏体验为主的，理性、文明、言之有物的发言，拒绝发泄、吐槽、谩骂等无实质内容和讨论价值的灌水式帖子。 【..."
+    },
+    {
+     "id": "725960",
+     "name": "友谊的小船我一个人也能划",
+     "avatar": "https://img3.doubanio.com/view/group/sqxs/public/0684cf3782658ff.jpg",
+     "member_count": 83504,
+     "desc_abstract": "百度百科中说友谊是一种来自双向（或交互）关系的情感，即双方共同凝结的情感，必须共同维系，任何单方面的示好或背离，不能称之为友谊。  欢迎大家加入本组..."
+    },
+    {
+     "id": "758533",
+     "name": "日落时分说爱你",
+     "avatar": "https://img3.doubanio.com/view/group/sqxs/public/053df5b6371a67d.jpg",
+     "member_count": 2973,
+     "desc_abstract": "腾讯终于有中老家恋综了，作为一个资深恋综儿，看了几集觉得很好看，欢迎大家一起讨论，一起追恋综～  首播时间2025-12-25，集数全10集 几对熟龄哥姐勇闯恋综..."
+    }
+   ]
+  },
+  {
+   "type": "groups_sets",
+   "module": "featured_groups_sets",
+   "groups_sets": [
+    {
+     "title": "从今天开始的打卡生活",
+     "is_featured": true,
+     "groups": [
+      {
+       "id": "667829",
+       "name": "滴！早起卡",
+       "avatar": "https://img9.doubanio.com/view/group/sqxs/public/600b66bb77f9544.jpg",
+       "member_count": 12193,
+       "desc_abstract": "早起方能养生——鲁迅（也没有说过嘿嘿） 1.每天早起打卡。 2.欢迎分享早起偏方、早起成功/失败经验、早起口号等交流，一起对抗地球重力/被窝结界。  3.本组..."
+      },
+      {
+       "id": "670666",
+       "name": "今天没做完的事",
+       "avatar": "https://img3.doubanio.com/view/group/sqxs/public/6d9f1159dd00f6a.jpg",
+       "member_count": 11962,
+       "desc_abstract": "昨天躺在床上，想起白天的计划并没有完成，很焦虑。  特此开这个小组，用于睡前写下今天未完成的计划，第二天来回复区回复完成情况，以督促自己。也欢迎有需..."
+      }
+     ]
+    },
+    {
+     "title": "宿舍生活日志",
+     "is_featured": true,
+     "groups": [
+      {
+       "id": "731173",
+       "name": "把宿舍改造成第二个家",
+       "avatar": "https://img3.doubanio.com/view/group/sqxs/public/9d6f293cd4e5f48.jpg",
+       "member_count": 29417,
+       "desc_abstract": "欢迎你，在宿舍生活的人们！ 欢迎你，宿舍改造大师or宿舍改造见习生！ 床位是统一的，但我们对住宿的追求不是！ 无论你是上床下桌二人四人豪华独卫配置，还是..."
+      },
+      {
+       "id": "614739",
+       "name": "在宿舍也可以好好吃饭",
+       "avatar": "https://img3.doubanio.com/view/group/sqxs/public/a131a1e82c264f7.jpg",
+       "member_count": 120830,
+       "desc_abstract": "宿舍党也可以在宿舍做些简单可口的饭菜，过上基本告别食堂的生活。 如果你也是喜欢做饭的宿舍党欢迎加入。  本小组是给大家一个分享自己在宿舍做的饭菜的地方..."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "groups",
+   "module": "rec_groups",
+   "title": "你可能感兴趣",
+   "is_featured": false,
+   "start": 0,
+   "count": 20,
+   "total": 60,
+   "groups": [
+    {
+     "group": {
+      "id": "728392",
+      "name": "想像Bar",
+      "avatar": "https://img3.doubanio.com/view/group/sqxs/public/44ff48f4dee57d2.jpg",
+      "member_count": 1919,
+      "desc_abstract": "(O) 本小组欢迎讨论对未来世界想像的话题,从科技、生活、工作等各面向。  (X)  本组不允许： 1. 灌水、闲聊、征友、约伴、二手闲置或其他与本组主题无关的讨..."
+     },
+     "topics": [
+      {
+       "id": "280850303",
+       "title": "长篇科幻小说《黄茧》",
+       "author": {
+        "avatar": "https://img3.doubanio.com/icon/up247716485-2.jpg",
+        "followed": false,
+        "gender": "",
+        "id": "247716485",
+        "is_banned_forever": false,
+        "is_club": false,
+        "is_readonly_forever": false,
+        "kind": "user",
+        "loc": null,
+        "name": "橙黄茧香",
+        "reg_time": "2021-10-03 15:28:14",
+        "type": "user",
+        "uid": "247716485",
+        "uri": "douban://douban.com/user/247716485",
+        "url": "https://www.douban.com/people/247716485/"
+       },
+       "comments_count": 21,
+       "create_time": "2022-12-29 22:32:00",
+       "cover_url": "",
+       "is_elite": true,
+       "elite_label": {
+        "text": "精",
+        "color_type": "red_p"
+       }
+      }
+     ],
+     "source": "hot"
+    },
+    {
+     "group": {
+      "id": "747262",
+      "name": "就想一起玩游戏",
+      "avatar": "https://img3.doubanio.com/img/files/file-1608538842.png",
+      "member_count": 1,
+      "desc_abstract": "在这里找一起玩游戏的好朋友"
+     },
+     "topics": [],
+     "source": "new"
+    },
+    {
+     "group": {
+      "id": "689394",
+      "name": "我爱腌酿品",
+      "avatar": "https://img3.doubanio.com/view/group/sqxs/public/63cfc120927a927.jpg",
+      "member_count": 9506,
+      "desc_abstract": "全都腌起来，用水、用酒、用醋、用盐、用糖、用蜂蜜……多多益善！  万物皆可腌制，青梅、蒜瓣、李子、柠檬、橄榄、猪肉、鱼干、梅干菜、豆角……想想就觉得..."
+     },
+     "topics": [
+      {
+       "id": "293113665",
+       "title": "今天做了一瓶石榴醋，上面的石榴就是不沉，就放了大冰糖压着",
+       "author": {
+        "avatar": "https://img9.doubanio.com/icon/up194143412-5.jpg",
+        "followed": false,
+        "gender": "F",
+        "id": "194143412",
+        "is_banned_forever": false,
+        "is_club": false,
+        "is_readonly_forever": false,
+        "kind": "user",
+        "loc": {
+         "id": "108296",
+         "name": "上海",
+         "uid": "shanghai"
+        },
+        "name": "( •̥́ ˍ •̀ू )",
+        "reg_time": "2019-03-29 19:35:00",
+        "type": "user",
+        "uid": "194143412",
+        "uri": "douban://douban.com/user/194143412",
+        "url": "https://www.douban.com/people/194143412/"
+       },
+       "comments_count": 4,
+       "create_time": "2023-08-10 01:28:44",
+       "cover_url": "https://img3.doubanio.com/view/group_topic/sqxs/public/p620674863.jpg",
+       "is_elite": false
+      }
+     ],
+     "source": "hot"
+    }
+   ]
+  }
+ ]
+}

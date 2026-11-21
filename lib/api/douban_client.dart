@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
@@ -77,13 +78,90 @@ class DoubanClient {
 /// verified Frodo /search/subjects endpoint; suggest still uses the
 /// Web endpoint until it is moved to Frodo /search/suggestion.
 class RealDoubanRepository implements DoubanRepository {
-  RealDoubanRepository(this._client);
+  RealDoubanRepository(this._client, {Dio? rexxarDio})
+      : _rexxarDio = rexxarDio ??
+            Dio(
+              BaseOptions(
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 15),
+              ),
+            );
 
   final DoubanClient _client;
+
+  /// Shared Dio for unsigned Rexxar calls. A test may inject its own
+  /// (e.g. with a counting adapter) through the constructor.
+  final Dio _rexxarDio;
+
+  /// Referer for subject routes (movie/recent/recommend/collection).
+  static const _movieReferer = 'https://movie.douban.com/';
+
+  /// Referer for group/rank/chart/landing routes.
+  static const _mReferer = 'https://m.douban.com/';
+
+  /// Short in-memory cache: key -> response. Only calls that pass a
+  /// [cacheTtl] are stored here.
+  final Map<String, _CachedRexxar> _rexxarCache = {};
+
+  /// In-flight identical requests, so concurrent callers share one
+  /// network call instead of firing the same request twice.
+  final Map<String, Future<dynamic>> _rexxarInflight = {};
 
   static List<T> _parseList<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
     if (raw is! List) return const [];
     return raw.whereType<Map<String, dynamic>>().map(fromJson).toList().cast<T>();
+  }
+
+  /// Shared Rexxar (unsigned) request helper (verified 2026-11-21).
+  ///
+  /// Every unsigned m.douban.com/rexxar call goes through here instead
+  /// of a hand-written Dio(): one place for the Referer, the timeouts
+  /// and the debug log. Network errors throw (DioException); a response
+  /// whose shape is not what the caller expects is the caller's problem
+  /// (it falls back to empty, never a crash), per the existing
+  /// convention. The decoded JSON is returned as-is (Map or List).
+  ///
+  /// [cacheTtl] opts a call into the short in-memory cache: identical
+  /// requests within the TTL return the cached response. Concurrent
+  /// identical requests always share one in-flight call, so
+  /// fetchHotGroups + fetchGroupExplore (the same /group/explore
+  /// request) do not hit the network twice. Callers sharing one
+  /// request should pass the same TTL.
+  Future<dynamic> _rexxarGet(
+    String path,
+    Map<String, dynamic> params, {
+    String referer = _movieReferer,
+    Duration? cacheTtl,
+  }) async {
+    final sortedKeys = params.keys.toList()..sort();
+    final key = '$referer|$path|${sortedKeys.map((k) => '$k=${params[k]}').join('&')}';
+    final now = DateTime.now();
+    final cached = _rexxarCache[key];
+    if (cacheTtl != null && cached != null && now.difference(cached.fetchedAt) < cacheTtl) {
+      debugPrint('[rexxar] cache hit $path');
+      return cached.data;
+    }
+    final inflight = _rexxarInflight[key];
+    if (inflight != null) {
+      debugPrint('[rexxar] sharing in-flight $path');
+      return inflight;
+    }
+    debugPrint('[rexxar] GET $path');
+    final future = _rexxarDio
+        .get(
+          'https://m.douban.com/rexxar/api/v2/$path',
+          queryParameters: params,
+          options: Options(headers: {'Referer': referer}),
+        )
+        .then<dynamic>((response) => response.data);
+    _rexxarInflight[key] = future;
+    try {
+      final data = await future;
+      if (cacheTtl != null) _rexxarCache[key] = _CachedRexxar(data, now);
+      return data;
+    } finally {
+      _rexxarInflight.remove(key);
+    }
   }
 
   @override
@@ -97,14 +175,8 @@ class RealDoubanRepository implements DoubanRepository {
 
   @override
   Future<List<Subject>> fetchRecentHot() async {
-    // Rexxar needs no signature; kept as a Dio call without Frodo signing.
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/subject/recent_hot/movie',
-      queryParameters: {'start': 0, 'limit': 20},
-      options: Options(headers: {'Referer': 'https://movie.douban.com/'}),
-    );
-    final data = response.data;
+    // Rexxar needs no signature; unsigned, via the shared helper.
+    final data = await _rexxarGet('subject/recent_hot/movie', {'start': 0, 'limit': 20});
     if (data is Map<String, dynamic>) {
       return _parseList(data['items'], (j) => Subject.fromJson(j, fallbackType: 'movie'));
     }
@@ -129,23 +201,12 @@ class RealDoubanRepository implements DoubanRepository {
     );
   }
 
-  Future<Map<String, dynamic>?> _rexxar(String path, Map<String, dynamic> params) async {
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/$path',
-      queryParameters: params,
-      options: Options(headers: {'Referer': 'https://movie.douban.com/'}),
-    );
-    final data = response.data;
-    return data is Map<String, dynamic> ? data : null;
-  }
-
   Future<BrowseResult> _rexxarCollection(String name, int start, int count) async {
-    final data = await _rexxar(
+    final data = await _rexxarGet(
       'subject_collection/$name/items',
       {'start': start, 'count': count, 'items_only': 1, 'for_mobile': 1},
     );
-    if (data == null) return const BrowseResult();
+    if (data is! Map<String, dynamic>) return const BrowseResult();
     return BrowseResult(
       items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
       total: (data['total'] as num?)?.toInt() ?? 0,
@@ -153,11 +214,11 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   Future<BrowseResult> _rexxarRecent(String type, int start, int count) async {
-    final data = await _rexxar(
+    final data = await _rexxarGet(
       'subject/recent_hot/$type',
       {'start': start, 'limit': count},
     );
-    if (data == null) return const BrowseResult();
+    if (data is! Map<String, dynamic>) return const BrowseResult();
     return BrowseResult(
       items: _parseList(data['items'], (j) => Subject.fromJson(j, fallbackType: type)),
       total: (data['total'] as num?)?.toInt() ?? 0,
@@ -167,8 +228,8 @@ class RealDoubanRepository implements DoubanRepository {
   // Recommend endpoints mix subject items with chart/readlist cards;
   // only flat subject items (movie/tv/book/music with an id) are kept.
   Future<BrowseResult> _rexxarRecommend(String type, int start, int count) async {
-    final data = await _rexxar('$type/recommend', {'start': start, 'count': count});
-    if (data == null) return const BrowseResult();
+    final data = await _rexxarGet('$type/recommend', {'start': start, 'count': count});
+    if (data is! Map<String, dynamic>) return const BrowseResult();
     final raw = data['items'];
     if (raw is! List) return const BrowseResult();
     final items = raw
@@ -192,8 +253,8 @@ class RealDoubanRepository implements DoubanRepository {
   /// movie_showing here; movie_showing additionally requires loc_id
   /// and is left on the Frodo route in fetchBrowse.
   Future<BrowseResult> _rexxarMovie(String name, int start, int count) async {
-    final data = await _rexxar('movie/$name', {'start': start, 'count': count});
-    if (data == null) return const BrowseResult();
+    final data = await _rexxarGet('movie/$name', {'start': start, 'count': count});
+    if (data is! Map<String, dynamic>) return const BrowseResult();
     return BrowseResult(
       items: _parseList(data['items'], (j) => Subject.fromJson(j)),
       total: (data['total'] as num?)?.toInt() ?? 0,
@@ -602,24 +663,11 @@ class RealDoubanRepository implements DoubanRepository {
     );
   }
 
-  @override
-  Future<List<SearchGroup>> fetchHotGroups() async {
-    // Rexxar /group/explore (unsigned, guest 200, 2026-10-31):
-    // {"feed": [...]} with a top_groups module (本周热门趋势榜Top20,
-    // 20 full group objects). The other modules (category_tags,
-    // groups_sets, groups/你可能感兴趣) are ignored here. This is the
-    // web-API equivalent of web /group/explore/hot_groups, verified
-    // by matching first entry + member count across both sources.
-    // Referer matches the probe (m.douban.com), not the movie referer
-    // used by the subject Rexxar calls.
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/group/explore',
-      queryParameters: {'start': 0, 'count': 20},
-      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
-    );
-    final data = response.data;
-    if (data is! Map<String, dynamic>) return const [];
+  /// Parses the Rexxar /group/explore response's top_groups module
+  /// (本周热门趋势榜Top20) into group summaries. Lenient: a missing or
+  /// misshaped module yields an empty list, never a throw. Fixture:
+  /// test/fixtures/group_explore.json (real response, 2026-11-21).
+  static List<SearchGroup> parseHotGroups(Map<String, dynamic> data) {
     final feed = data['feed'];
     if (feed is! List) return const [];
     for (final module in feed.whereType<Map<String, dynamic>>()) {
@@ -632,19 +680,33 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
-  Future<List<RankBoard>> fetchRankBoards(String tagId) async {
-    // Rexxar /tag/{tagId}/subject_collection_boards (unsigned,
-    // guest 200, 2026-10-31). Referer matches the probe
-    // (m.douban.com), as in fetchHotGroups. Tag ids are numeric:
-    // 49 = 影视, 2 = 音乐, 3 = 图书, 42 = 游戏; a tag NAME here 404s.
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/tag/$tagId/subject_collection_boards',
-      queryParameters: {'start': 0, 'count': 50},
-      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+  Future<List<SearchGroup>> fetchHotGroups() async {
+    // Rexxar /group/explore (unsigned, guest 200, 2026-10-31):
+    // {"feed": [...]} with a top_groups module (本周热门趋势榜Top20,
+    // 20 full group objects). This is the web-API equivalent of web
+    // /group/explore/hot_groups, verified by matching first entry +
+    // member count across both sources. The other modules
+    // (category_tags, groups_sets, groups/更多小组） are parsed by
+    // fetchGroupExplore from the same response; the 5-minute cache
+    // keeps both callers on one request. Referer matches the probe
+    // (m.douban.com), not the movie referer used by the subject
+    // Rexxar calls.
+    final data = await _rexxarGet(
+      'group/explore',
+      {'start': 0, 'count': 20},
+      referer: _mReferer,
+      cacheTtl: const Duration(minutes: 5),
     );
-    final data = response.data;
     if (data is! Map<String, dynamic>) return const [];
+    return parseHotGroups(data);
+  }
+
+  /// Parses the Rexxar /tag/{tagId}/subject_collection_boards
+  /// response into boards with their preview subjects. Lenient: a
+  /// missing or misshaped list yields an empty list, never a throw.
+  /// Fixture: test/fixtures/rank_boards_tag49.json (real response,
+  /// 2026-11-21).
+  static List<RankBoard> parseRankBoards(Map<String, dynamic> data) {
     final boards = data['subject_collection_boards'];
     if (boards is! List) return const [];
     return boards.whereType<Map<String, dynamic>>().map((b) {
@@ -664,18 +726,31 @@ class RealDoubanRepository implements DoubanRepository {
   }
 
   @override
+  Future<List<RankBoard>> fetchRankBoards(String tagId) async {
+    // Rexxar /tag/{tagId}/subject_collection_boards (unsigned,
+    // guest 200, 2026-10-31). Referer matches the probe
+    // (m.douban.com), as in fetchHotGroups. Tag ids are numeric:
+    // 49 = 影视, 2 = 音乐, 3 = 图书, 42 = 游戏; a tag NAME here 404s.
+    final data = await _rexxarGet(
+      'tag/$tagId/subject_collection_boards',
+      {'start': 0, 'count': 50},
+      referer: _mReferer,
+    );
+    if (data is! Map<String, dynamic>) return const [];
+    return parseRankBoards(data);
+  }
+
+  @override
   Future<BrowseResult> fetchBoardItems(String boardId, {int start = 0, int count = 20}) async {
     // Rexxar /subject_collection/{boardId}/items (unsigned, guest
     // 200, 2026-10-31), called exactly as probed: start/count only,
     // no items_only/for_mobile extras. Items carry rank/rank_value,
     // parsed into Subject.rank.
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/subject_collection/$boardId/items',
-      queryParameters: {'start': start, 'count': count},
-      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
+    final data = await _rexxarGet(
+      'subject_collection/$boardId/items',
+      {'start': start, 'count': count},
+      referer: _mReferer,
     );
-    final data = response.data;
     if (data is! Map<String, dynamic>) return const BrowseResult();
     return BrowseResult(
       items: _parseList(data['subject_collection_items'], (j) => Subject.fromJson(j)),
@@ -698,13 +773,7 @@ class RealDoubanRepository implements DoubanRepository {
     // unchanged, so it is omitted entirely when off.
     final params = <String, dynamic>{'q': q, 'sort': sort, 'start': start, 'count': count};
     if (playable) params['playable'] = 'true';
-    final dio = Dio();
-    final response = await dio.get(
-      'https://m.douban.com/rexxar/api/v2/$endpoint/tag',
-      queryParameters: params,
-      options: Options(headers: {'Referer': 'https://m.douban.com/'}),
-    );
-    final data = response.data;
+    final data = await _rexxarGet('$endpoint/tag', params, referer: _mReferer);
     if (data is! Map<String, dynamic>) return const TagSearchResult();
     return TagSearchResult(
       items: _parseList(
@@ -882,4 +951,13 @@ class RealDoubanRepository implements DoubanRepository {
       total: (data['total'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// One cached Rexxar response with the time it was fetched, for the
+/// helper's short in-memory cache.
+class _CachedRexxar {
+  const _CachedRexxar(this.data, this.fetchedAt);
+
+  final dynamic data;
+  final DateTime fetchedAt;
 }
