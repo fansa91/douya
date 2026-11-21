@@ -414,6 +414,35 @@ class LoadingList extends StatelessWidget {
   }
 }
 
+/// Pinned tab header for a CustomScrollView: exactly one tab-bar
+/// height, so the bar sticks to the top without a gap or a clip
+/// once the sections above it have scrolled away. The child is
+/// usually a TabBar, or a Row of a TabBar plus a filter chip; it
+/// must be 48 tall (kTextTabBarHeight). The background is opaque
+/// so list content does not show through while pinned.
+class PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  const PinnedTabBarDelegate(this.child);
+
+  final Widget child;
+
+  @override
+  double get minExtent => 48;
+
+  @override
+  double get maxExtent => 48;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(PinnedTabBarDelegate oldDelegate) => child != oldDelegate.child;
+}
+
 /// One grey placeholder bar for skeleton screens. Uses the
 /// surface container color, so it adapts to light and dark mode.
 class SkeletonBar extends StatelessWidget {

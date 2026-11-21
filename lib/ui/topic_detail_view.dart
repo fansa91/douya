@@ -124,8 +124,13 @@ class TopicDetailView extends StatefulWidget {
   State<TopicDetailView> createState() => _TopicDetailViewState();
 }
 
-class _TopicDetailViewState extends State<TopicDetailView> {
+class _TopicDetailViewState extends State<TopicDetailView> with SingleTickerProviderStateMixin {
   late Future<TopicDetail> _future = widget.repository.fetchTopic(widget.topicId);
+  late final TabController _tabController = TabController(length: 2, vsync: this);
+
+  /// Reply tab: 0 最新， 1 热门. The TabBar switches it; there is
+  /// no TabBarView because both tabs render into the same list.
+  int _tab = 0;
 
   /// Loaded replies and the comments endpoint's total. They are
   /// seeded from the first page when the detail future resolves
@@ -141,12 +146,20 @@ class _TopicDetailViewState extends State<TopicDetailView> {
   bool _onlyAuthor = false;
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant TopicDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.topicId != widget.topicId) {
       _future = widget.repository.fetchTopic(widget.topicId);
       _loadedId = '';
       _onlyAuthor = false;
+      _tab = 0;
+      _tabController.index = 0;
     }
   }
 
@@ -178,9 +191,13 @@ class _TopicDetailViewState extends State<TopicDetailView> {
 
   /// Footer for the reply list: auto-loads the next page when it
   /// appears (LoadMoreFooter), shows the loaded/total count, and
-  /// offers a retry after a failure instead of a SnackBar.
+  /// offers a retry after a failure instead of a SnackBar. The key
+  /// keeps the footer's state (its auto-page counter) when the list
+  /// grows: without it the footer remounts on every page load and
+  /// its desktop "pause after 3 auto pages" never engages.
   Widget _commentsFooter() {
     return LoadMoreFooter(
+      key: const ValueKey('topic-comments-footer'),
       canLoadMore: () => !_loadingMore && _comments.length < _total,
       onLoadMore: _loadMoreComments,
       failed: _loadMoreFailed,
@@ -188,22 +205,24 @@ class _TopicDetailViewState extends State<TopicDetailView> {
     );
   }
 
-  /// Hot replies: the API's popular_comments when present (up to
-  /// 3, floor unknown), else the three most-liked loaded replies
-  /// (labelled "已加载中最赞"). Skipped when there are too few
-  /// replies to pick from.
+  /// Hot replies for the 热门 tab: the API's popular_comments when
+  /// present (up to 10, floor unknown), else the ten most-liked
+  /// loaded replies (labelled "已加载中最赞" by the caller). The
+  /// server offers no hot sort — the comments endpoint was
+  /// 403-gated across the board when probed 2026-11-21, so a sort
+  /// parameter could not be verified — so the fallback ranks what
+  /// the 最新 tab has already loaded. Respects 只看楼主.
+  /// Floors are positions in the latest order, so the hot tab
+  /// shows none (null): these rows are ranked by votes, not time.
   List<(int?, TopicComment)> _hotReplies(TopicDetail detail) {
+    bool isAuthor(TopicComment c) => c.authorId.isNotEmpty && c.authorId == detail.topic.authorId;
     if (detail.popularComments.isNotEmpty) {
-      return detail.popularComments.take(3).map((c) => (null, c)).toList();
+      final popular = _onlyAuthor ? detail.popularComments.where(isAuthor).toList() : detail.popularComments;
+      return popular.take(10).map((c) => (null, c)).toList();
     }
-    if (_comments.length < 6) return const [];
-    final sorted = _comments.asMap().entries.toList()
-      ..sort((a, b) => b.value.voteCount.compareTo(a.value.voteCount));
-    return sorted
-        .take(3)
-        .where((e) => e.value.voteCount > 0)
-        .map((e) => (e.key + 1, e.value))
-        .toList();
+    final pool = _onlyAuthor ? _comments.where(isAuthor).toList() : _comments;
+    final sorted = pool.toList()..sort((a, b) => b.voteCount.compareTo(a.voteCount));
+    return sorted.take(10).where((c) => c.voteCount > 0).map((c) => (null, c)).toList();
   }
 
   @override
@@ -292,27 +311,44 @@ class _TopicDetailViewState extends State<TopicDetailView> {
             .where((e) => !_onlyAuthor || (e.value.authorId.isNotEmpty && e.value.authorId == detail.topic.authorId))
             .map((e) => (e.key + 1, e.value))
             .toList();
-        final hot = _hotReplies(detail);
         // Wide detail pane (>=900, measured on the pane itself,
         // not the window): body left (max 760, centred), replies
         // right (fixed 440, own scroll, pinned header). Narrow
         // panes — mobile, and the group tab's detail pane when the
         // window is too small to split — keep the single
-        // top-to-bottom column.
+        // top-to-bottom column, with the tab row pinned once the
+        // body has scrolled away.
         return LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth < Breakpoints.paneSplit) {
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _headerCard(context, detail),
-                  const SizedBox(height: 16),
-                  ..._bodyBlocks(context, detail, blocks),
-                  _topicMedia(context, detail, blocks),
-                  const Divider(height: 32),
-                  _repliesHeader(context, detail, replyTitle),
-                  const SizedBox(height: 8),
-                  ..._replyChildren(context, detail, visible, hot),
+              return CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _headerCard(context, detail),
+                          const SizedBox(height: 16),
+                          ..._bodyBlocks(context, detail, blocks),
+                          _topicMedia(context, detail, blocks),
+                          const Divider(height: 32),
+                          Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: PinnedTabBarDelegate(_tabBarRow(detail)),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverMainAxisGroup(
+                      slivers: _tabContentSlivers(context, detail, visible),
+                    ),
+                  ),
                 ],
               );
             }
@@ -340,16 +376,30 @@ class _TopicDetailViewState extends State<TopicDetailView> {
                   SizedBox(
                     width: 440,
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: _repliesHeader(context, detail, replyTitle),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(replyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              _tabBarRow(detail),
+                            ],
+                          ),
                         ),
                         const Divider(height: 1),
                         Expanded(
-                          child: ListView(
-                            padding: const EdgeInsets.all(16),
-                            children: _replyChildren(context, detail, visible, hot),
+                          child: CustomScrollView(
+                            slivers: [
+                              SliverPadding(
+                                padding: const EdgeInsets.all(16),
+                                sliver: SliverMainAxisGroup(
+                                  slivers: _tabContentSlivers(context, detail, visible),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -364,14 +414,20 @@ class _TopicDetailViewState extends State<TopicDetailView> {
     );
   }
 
-  /// "回应 N" plus the 只看楼主 toggle. On desktop this row is
-  /// pinned above the independently scrolling reply list; on
-  /// mobile it sits at the top of the single column.
-  Widget _repliesHeader(BuildContext context, TopicDetail detail, String title) {
+  /// The sticky tab row: 最新 / 热门 plus the 只看楼主 toggle,
+  /// which applies to both tabs. On mobile this row is pinned by
+  /// a SliverPersistentHeader; on desktop it sits in the pinned
+  /// header of the right column.
+  Widget _tabBarRow(TopicDetail detail) {
     return Row(
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const Spacer(),
+        Expanded(
+          child: TabBar(
+            controller: _tabController,
+            onTap: (i) => setState(() => _tab = i),
+            tabs: const [Tab(text: '最新'), Tab(text: '热门')],
+          ),
+        ),
         if (detail.topic.authorId.isNotEmpty)
           FilterChip(
             label: const Text('只看楼主'),
@@ -384,29 +440,61 @@ class _TopicDetailViewState extends State<TopicDetailView> {
     );
   }
 
-  List<Widget> _replyChildren(
+  /// The reply list under the active tab, as slivers. 最新 is the
+  /// paged list (floors in default order) with the load-more
+  /// footer; 热门 is the API's popular replies, or the most-liked
+  /// loaded ones when the API sent none (labelled, and noted as
+  /// loaded-only when more replies remain unloaded). Rows are a
+  /// lazy SliverList so the footer only mounts when scrolled near
+  /// — an eager Column would mount it at once and cascade-load the
+  /// whole thread on open.
+  List<Widget> _tabContentSlivers(
     BuildContext context,
     TopicDetail detail,
     List<(int, TopicComment)> visible,
-    List<(int?, TopicComment)> hot,
   ) {
-    return [
-      // The hot section is the API's (or most-liked) replies, not
-      // the author's, so it is hidden under 只看楼主.
-      if (hot.isNotEmpty && !_onlyAuthor) ...[
-        Text(
-          detail.popularComments.isNotEmpty ? '热门回应' : '已加载中最赞',
-          style: Theme.of(context).textTheme.bodySmall,
+    if (_tab == 1) {
+      final hot = _hotReplies(detail);
+      final fromApi = detail.popularComments.isNotEmpty;
+      if (hot.isEmpty) {
+        return [SliverToBoxAdapter(child: EmptyState(message: _onlyAuthor ? '楼主在已加载的回应中暂无发言' : '暂无热门回应'))];
+      }
+      return [
+        if (!fromApi)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('已加载中最赞', style: Theme.of(context).textTheme.bodySmall),
+            ),
+          ),
+        SliverList.builder(
+          itemCount: hot.length,
+          itemBuilder: (context, i) => _commentRow(context, hot[i].$2, null, detail.topic.authorId),
         ),
-        const SizedBox(height: 4),
-        for (final (floor, c) in hot) _commentRow(context, c, floor, detail.topic.authorId),
-        const Divider(height: 24),
-      ],
+        if (!fromApi && _comments.length < _total)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                '仅按已加载的 ${_comments.length} 条回应排序，切换到最新加载更多后更新',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+      ];
+    }
+    return [
       if (visible.isEmpty)
-        EmptyState(message: _onlyAuthor ? '楼主在已加载的回应中暂无发言' : '暂无回复')
+        SliverToBoxAdapter(child: EmptyState(message: _onlyAuthor ? '楼主在已加载的回应中暂无发言' : '暂无回复'))
       else
-        for (final (floor, c) in visible) _commentRow(context, c, floor, detail.topic.authorId),
-      if (visible.isNotEmpty || _total > 0) _commentsFooter(),
+        SliverList.builder(
+          itemCount: visible.length,
+          itemBuilder: (context, i) {
+            final (floor, c) = visible[i];
+            return _commentRow(context, c, floor, detail.topic.authorId);
+          },
+        ),
+      if (visible.isNotEmpty || _total > 0) SliverToBoxAdapter(child: _commentsFooter()),
     ];
   }
 

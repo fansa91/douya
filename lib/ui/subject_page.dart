@@ -824,7 +824,7 @@ class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderS
         ),
         SliverPersistentHeader(
           pinned: true,
-          delegate: _PinnedTabBarDelegate(
+          delegate: PinnedTabBarDelegate(
             TabBar(
               controller: _tabController,
               tabs: const [Tab(text: '相关视频'), Tab(text: '评论')],
@@ -847,32 +847,6 @@ class _MobileDetailState extends State<_MobileDetail> with SingleTickerProviderS
       ),
     );
   }
-}
-
-/// Pinned tab header for the mobile detail page: exactly the
-/// TabBar's own height, so the bar sticks to the top without a gap
-/// or a clip once the info sections have scrolled away.
-class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
-  const _PinnedTabBarDelegate(this.tabBar);
-
-  final TabBar tabBar;
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: tabBar,
-    );
-  }
-
-  @override
-  bool shouldRebuild(_PinnedTabBarDelegate oldDelegate) => tabBar != oldDelegate.tabBar;
 }
 
 /// Right-tab content: related subjects (tap navigates to their

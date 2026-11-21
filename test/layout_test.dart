@@ -184,6 +184,33 @@ class _SlowBrowseRepo extends FakeDoubanRepository {
       (calls['$category/$filter/$start'] = Completer<BrowseResult>()).future;
 }
 
+/// A topic repo with 100 replies and no popular_comments. Votes
+/// fall with the index (路人1 has 99); the author has 30.
+class _BigTopicRepo extends FakeDoubanRepository {
+  static List<TopicComment> get _comments100 {
+    final comments = <TopicComment>[];
+    for (var i = 0; i < 100; i++) {
+      final isAuthor = i == 0;
+      comments.add(TopicComment(
+        authorName: isAuthor ? '房东' : '路人$i',
+        authorId: isAuthor ? 'u-landlord' : 'u-$i',
+        text: isAuthor ? '我是房东，房子还在' : '回复内容$i',
+        voteCount: isAuthor ? 30 : 100 - i,
+        createTime: '2026-11-20 10:00',
+        ipLocation: i % 3 == 0 ? '上海' : null,
+      ));
+    }
+    return comments;
+  }
+
+  @override
+  Future<TopicCommentsResult> fetchTopicComments(String topicId, {int start = 0, int count = 20}) async {
+    final all = _comments100;
+    final page = start < all.length ? all.sublist(start, (start + count).clamp(0, all.length)) : const <TopicComment>[];
+    return TopicCommentsResult(comments: page, total: all.length);
+  }
+}
+
 /// A repo whose board-items endpoint always fails.
 class _NoFullBoards extends FakeDoubanRepository {
   const _NoFullBoards();
@@ -1114,6 +1141,9 @@ void main() {
 
   // Step 3: 楼主 badge, IP 属地， quoted reply, hot replies, and
   // the floor number. A tall viewport shows the whole page.
+  // Item 1: the hot section became a 热门 tab; the default 最新
+  // tab holds the quote and the floors, the 热门 tab the API's
+  // popular replies (路人3/路人4) with no floor numbers.
   testWidgets('topic detail shows author badge, ip location, quote, hot replies', (tester) async {
     await _pumpPage(
       tester,
@@ -1121,10 +1151,60 @@ void main() {
       const Size(390, 3000),
     );
     expect(find.text('楼主'), findsOneWidget);
-    expect(find.text('热门回应'), findsOneWidget);
     expect(find.text('路人1：请问还可以看房吗？'), findsOneWidget);
     expect(find.text('1楼'), findsOneWidget);
     expect(find.text('只看楼主'), findsOneWidget);
+    await tester.tap(find.text('热门'));
+    await tester.pumpAndSettle();
+    expect(find.text('路人3'), findsOneWidget);
+    expect(find.text('路人4'), findsOneWidget);
+    expect(find.text('路人5'), findsNothing);
+    expect(find.text('1楼'), findsNothing);
+  });
+
+  // Item 1: with no popular_comments from the API, the 热门 tab
+  // falls back to the most-liked loaded replies, labelled
+  // 已加载中最赞 with a loaded-only note. On desktop the footer
+  // pauses after 3 auto pages, so a 100-reply topic has 80 loaded
+  // when the tab is opened (on mobile the footer would cascade to
+  // the full list, so the note never shows there).
+  testWidgets('topic detail hot tab falls back to most-liked loaded replies', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(TopicDetailPage(repository: _BigTopicRepo(), topicId: '504122375'))),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('热门'));
+    await tester.pumpAndSettle();
+    expect(find.text('已加载中最赞'), findsOneWidget);
+    // Votes fall with the index (路人1 has 99), so the top of the
+    // loaded ranking is 路人1. The loaded-only note sits at the
+    // bottom of the hot list: scroll the replies column to it.
+    expect(find.text('路人1'), findsOneWidget);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    expect(find.text('仅按已加载的 80 条回应排序，切换到最新加载更多后更新'), findsOneWidget);
+  });
+
+  // Item 1: on mobile the tab row pins once the body has scrolled
+  // away; before scrolling it sits below the fold.
+  testWidgets('topic detail tab row pins on mobile', (tester) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(home: _scaffolded(const TopicDetailPage(repository: _repository, topicId: '504122375'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('热门').hitTestable(), findsNothing);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    expect(find.text('热门').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   // Step 3: 只看楼主 keeps only the topic author's replies.
