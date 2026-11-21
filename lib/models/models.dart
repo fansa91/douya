@@ -1217,12 +1217,20 @@ class AwardsResult {
 /// `imageUrl` resolves large first, then normal. Fixture:
 /// celebrity_photos_1054521.json.
 class CelebrityPhoto {
-  const CelebrityPhoto({required this.id, this.imageUrl, this.description = '', this.authorName = ''});
+  const CelebrityPhoto({required this.id, this.imageUrl, this.description = '', this.authorName = '', this.width, this.height});
 
   final String id;
   final String? imageUrl;
   final String description;
   final String authorName;
+
+  /// Pixel size from the image size object ({url, width, height}),
+  /// when the payload carries one (verified 2026-11-21: large
+  /// 594×439, 526×739). The photo wall uses it for the natural
+  /// aspect ratio; null means the size is unknown and the wall
+  /// falls back to 4:3.
+  final int? width;
+  final int? height;
 
   factory CelebrityPhoto.fromJson(Map<String, dynamic> json) {
     final author = json['author'];
@@ -1231,11 +1239,22 @@ class CelebrityPhoto {
     // resolve large first, then normal (same as Subject.pic).
     final image = json['image'];
     final imageMap = image is Map ? image.cast<String, dynamic>() : const <String, dynamic>{};
+    // Dimensions come from the same size object that supplied the
+    // url (large first, then normal).
+    final size = imageMap['large'] is Map ? imageMap['large'] : imageMap['normal'];
+    int? width;
+    int? height;
+    if (size is Map) {
+      width = (size['width'] as num?)?.toInt();
+      height = (size['height'] as num?)?.toInt();
+    }
     return CelebrityPhoto(
       id: '${json['id'] ?? ''}',
       imageUrl: imageUrlOf(imageMap['large']) ?? imageUrlOf(imageMap['normal']),
       description: (json['description'] as String?) ?? '',
       authorName: (authorMap['name'] as String?) ?? '',
+      width: width,
+      height: height,
     );
   }
 }

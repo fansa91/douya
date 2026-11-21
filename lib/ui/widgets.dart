@@ -211,10 +211,14 @@ class RetryState extends StatelessWidget {
 /// only) with a pointer cursor, and right-click opens the link menu
 /// (copy link / open in browser). Mobile is unchanged.
 class SubjectPosterCard extends StatefulWidget {
-  const SubjectPosterCard({super.key, required this.subject, this.onTap});
+  const SubjectPosterCard({super.key, required this.subject, this.onTap, this.subtitle});
 
   final Subject subject;
   final VoidCallback? onTap;
+
+  /// A second line shown instead of the rating (e.g. the
+  /// celebrity page's "年份 · 角色"). Null keeps the rating row.
+  final String? subtitle;
 
   @override
   State<SubjectPosterCard> createState() => _SubjectPosterCardState();
@@ -287,7 +291,9 @@ class _SubjectPosterCardState extends State<SubjectPosterCard> {
               const SizedBox(height: 8),
               Text(subject.title, maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 2),
-              if (subject.isDoulist)
+              if (widget.subtitle != null)
+                Text(widget.subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall)
+              else if (subject.isDoulist)
                 Text('豆列 · ${subject.doulistCount ?? ''} 条', style: Theme.of(context).textTheme.bodySmall)
               else if (subject.rating != null && subject.rating!.value > 0)
                 RatingText(rating: subject.rating!)
