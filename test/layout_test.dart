@@ -17,6 +17,7 @@ import 'package:douya/ui/group_page.dart';
 import 'package:douya/ui/group_topics_view.dart';
 import 'package:douya/ui/home_page.dart';
 import 'package:douya/ui/image_preview_page.dart';
+import 'package:douya/ui/landing_page.dart';
 import 'package:douya/ui/rankings_page.dart';
 import 'package:douya/ui/search_page.dart';
 import 'package:douya/ui/settings_page.dart';
@@ -1512,6 +1513,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('后会友期'), findsOneWidget);
     expect(find.text('更多小组一'), findsNothing);
+  });
+
+  // Step 4: the landing page sections the groups (boards as cards,
+  // tags as chips) and a tag chip opens the filter preselected.
+  testWidgets('landing page opens the filter with the tag preselected', (tester) async {
+    await _pumpPage(
+      tester,
+      const LandingPage(repository: FakeDoubanRepository(), endpoint: 'movie'),
+      const Size(390, 3000),
+    );
+    expect(find.text('专题'), findsOneWidget);
+    expect(find.text('豆瓣热门'), findsOneWidget);
+    expect(find.text('类型'), findsOneWidget);
+    expect(find.text('喜剧'), findsOneWidget);
+    await tester.tap(find.text('喜剧'));
+    await tester.pumpAndSettle();
+    expect(find.text('类型：喜剧'), findsOneWidget);
+    expect(find.text('肖申克的救赎'), findsWidgets);
+  });
+
+  // Step 4: a landing board card opens the board detail with the
+  // full list (a slug board, not just the 3-subject preview).
+  testWidgets('landing board card opens the board detail', (tester) async {
+    await _pumpPage(
+      tester,
+      const LandingPage(repository: FakeDoubanRepository(), endpoint: 'movie'),
+      const Size(390, 3000),
+    );
+    await tester.tap(find.text('豆瓣热门'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BoardDetailPage), findsOneWidget);
+    expect(find.text('肖申克的救赎'), findsWidgets);
+  });
+
+  // Step 4: the browse page's 找片 chip opens the landing page.
+  testWidgets('browse page find chip opens the landing page', (tester) async {
+    await _pumpPage(
+      tester,
+      _scaffolded(const BrowsePage(repository: FakeDoubanRepository(), initialCategory: 'movie')),
+      const Size(390, 800),
+    );
+    expect(find.text('找片'), findsOneWidget);
+    await tester.tap(find.text('找片'));
+    await tester.pumpAndSettle();
+    // 专题 is the landing page's section title; 豆瓣热门 appears
+    // twice (the browse filter chip and the landing board card).
+    expect(find.text('专题'), findsOneWidget);
+    expect(find.text('豆瓣热门'), findsWidgets);
   });
 
   // Item 3: a long swipe down dismisses the preview; a short slow

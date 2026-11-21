@@ -678,6 +678,71 @@ class GroupExplore {
   final int recommendedTotal;
 }
 
+/// The header background colours of a landing entry
+/// (header_bg_color: {is_dark, primary_color_dark,
+/// primary_color_light, secondary_color}). Parsed for the board
+/// cards' styling; a missing object yields null colours.
+class LandingHeaderColors {
+  const LandingHeaderColors({this.isDark = false, this.primaryDark, this.primaryLight, this.secondary});
+
+  final bool isDark;
+  final String? primaryDark;
+  final String? primaryLight;
+  final String? secondary;
+
+  factory LandingHeaderColors.fromJson(Map<String, dynamic> json) {
+    return LandingHeaderColors(
+      isDark: json['is_dark'] as bool? ?? false,
+      primaryDark: json['primary_color_dark'] as String?,
+      primaryLight: json['primary_color_light'] as String?,
+      secondary: json['secondary_color'] as String?,
+    );
+  }
+}
+
+/// One entry of the find-movie / find-tv landing page (Rexxar
+/// /{movie|tv}/landing, verified 2026-11-21): {name, uri,
+/// header_bg_image, header_bg_color}. `uri` is kept raw for the
+/// deep-link parser.
+class LandingItem {
+  const LandingItem({required this.name, this.uri = '', this.headerBgImage, this.headerBgColor});
+
+  final String name;
+  final String uri;
+  final String? headerBgImage;
+  final LandingHeaderColors? headerBgColor;
+
+  factory LandingItem.fromJson(Map<String, dynamic> json) {
+    final colors = json['header_bg_color'];
+    return LandingItem(
+      name: (json['name'] as String?) ?? '',
+      uri: (json['uri'] as String?) ?? '',
+      headerBgImage: json['header_bg_image'] as String?,
+      headerBgColor: colors is Map<String, dynamic> ? LandingHeaderColors.fromJson(colors) : null,
+    );
+  }
+}
+
+/// One group of the find-movie / find-tv landing page: {name, items}.
+/// The groups are 专题 (board deep links) + 类型/地区/特色/播出平台
+/// (tag deep links).
+class LandingGroup {
+  const LandingGroup({required this.name, this.items = const []});
+
+  final String name;
+  final List<LandingItem> items;
+
+  factory LandingGroup.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    return LandingGroup(
+      name: (json['name'] as String?) ?? '',
+      items: raw is List
+          ? raw.whereType<Map<String, dynamic>>().map(LandingItem.fromJson).toList()
+          : const [],
+    );
+  }
+}
+
 class SearchGroupResult {
   const SearchGroupResult({this.groups = const [], this.topics = const []});
 

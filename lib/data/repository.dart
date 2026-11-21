@@ -86,6 +86,14 @@ abstract class DoubanRepository {
   /// empty. A wrong-shaped response returns an empty list; a network
   /// error throws.
   Future<List<HotSearchBoardItem>> fetchHotSearchBoard();
+
+  /// Find-movie / find-tv landing: Rexxar /{movie|tv}/landing
+  /// (unsigned, guest 200, verified 2026-11-21). Returns the tag
+  /// groups {name, items[{name, uri, header_bg_image,
+  /// header_bg_color}]}: 专题 (board deep links) + 类型/地区/特色/
+  /// 播出平台 (tag deep links). A wrong-shaped response returns an
+  /// empty list; a network error throws.
+  Future<List<LandingGroup>> fetchLanding(String type);
   Future<List<SearchContentItem>> fetchSearchContent(String query, {int start = 0, int count = 20});
   Future<SearchGroupResult> fetchSearchGroups(String query, {int start = 0, int count = 20});
   Future<List<SearchUser>> fetchSearchUsers(String query, {int start = 0, int count = 20});

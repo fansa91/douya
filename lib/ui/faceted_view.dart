@@ -18,12 +18,18 @@ import 'widgets.dart';
 /// same q), so results may mix forms; the browse category only
 /// decides which endpoint path is called.
 class FacetedView extends StatefulWidget {
-  const FacetedView({super.key, required this.repository, required this.endpoint});
+  const FacetedView({super.key, required this.repository, required this.endpoint, this.initialSelection = const {}});
 
   final DoubanRepository repository;
 
   /// 'movie' or 'tv'.
   final String endpoint;
+
+  /// Preselected dimension values (group type -> value), e.g. from a
+  /// landing chip: {'类型': '喜剧'}. A key need not match a tag-search
+  /// dimension (播出平台 has none); such a value still goes into the
+  /// query and renders as its own dropdown / deletable chip.
+  final Map<String, String> initialSelection;
 
   @override
   State<FacetedView> createState() => _FacetedViewState();
@@ -44,6 +50,7 @@ class _FacetedViewState extends State<FacetedView> {
   @override
   void initState() {
     super.initState();
+    _selected.addAll(widget.initialSelection);
     _search(reset: true);
   }
 
@@ -176,6 +183,20 @@ class _FacetedViewState extends State<FacetedView> {
             ],
             (value) => _select(group.type, value),
           ),
+        // Selected keys the tag search has no dimension for (e.g.
+        // 播出平台 from a landing chip): they still filter the query,
+        // so they get their own dropdown (全部 clears them). Gated on
+        // _groups so real groups are not doubled before the first
+        // search returns.
+        if (_groups.isNotEmpty)
+          for (final entry in _selected.entries)
+            if (!_groups.any((g) => g.type == entry.key))
+              _dropdownChip(
+                entry.key,
+                entry.value,
+                [const MapEntry<String?, String>(null, '全部'), MapEntry<String?, String>(entry.value, entry.value)],
+                (value) => _select(entry.key, value),
+              ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [

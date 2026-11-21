@@ -132,6 +132,31 @@ Future<List<HotSearchBoardItem>> fetchHotSearchBoard() async => const [
 ];
 
 @override
+Future<List<LandingGroup>> fetchLanding(String type) async {
+  if (type == 'tv') {
+    return const [
+      LandingGroup(name: '地区', items: [
+        LandingItem(name: '大陆剧', uri: 'douban://douban.com/tv/tag?q=中国大陆,电视剧'),
+        LandingItem(name: '美剧', uri: 'douban://douban.com/tv/tag?q=美国,电视剧'),
+      ]),
+      LandingGroup(name: '播出平台', items: [
+        LandingItem(name: 'HBO', uri: 'douban://douban.com/tv/tag?q=HBO,电视剧'),
+      ]),
+    ];
+  }
+  return const [
+    LandingGroup(name: '专题', items: [
+      LandingItem(name: '豆瓣热门', uri: 'douban://douban.com/subject_collection/movie_hot_gaia'),
+      LandingItem(name: '最新电影', uri: 'douban://douban.com/subject_collection/movie_newest'),
+    ]),
+    LandingGroup(name: '类型', items: [
+      LandingItem(name: '喜剧', uri: 'douban://douban.com/subject/recommendation/movie?tag=喜剧,电影'),
+      LandingItem(name: '动作', uri: 'douban://douban.com/subject/recommendation/movie?tag=动作,电影'),
+    ]),
+  ];
+}
+
+@override
 Future<List<SearchContentItem>> fetchSearchContent(String query, {int start = 0, int count = 20}) async {
 if (query.isEmpty) return const [];
 return const [SearchContentItem(id: '1', title: '示例话题', subtitle: '离线示例，真实数据走 Frodo /search/content_tab')];

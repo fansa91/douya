@@ -4,6 +4,7 @@ import 'breakpoints.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
 import 'faceted_view.dart';
+import 'landing_page.dart';
 import 'subject_page.dart';
 import 'widgets.dart';
 
@@ -163,10 +164,10 @@ class _BrowsePageState extends State<BrowsePage> {
 
   Future<void> _load() async {
     final seq = ++_seq; // any older request is invalid from here on
-    // The 推荐 category and the 多维筛选 filter do not use
-    // fetchBrowse at all; they render their own views, which drive
-    // their own searches.
-    if (_category == 'recommend' || _filter == 'filter') {
+    // The 推荐 category, the 多维筛选 filter and the 找片 filter do
+    // not use fetchBrowse at all; they render their own views, which
+    // drive their own searches.
+    if (_category == 'recommend' || _filter == 'filter' || _filter == 'landing') {
       setState(() {
         _loading = false;
         _error = null;
@@ -304,9 +305,17 @@ class _BrowsePageState extends State<BrowsePage> {
                 ]),
               ),
               if (facet) ...[
-                // The faceted filter stays pinned at the right end
-                // of the row instead of scrolling away with the
-                // other chips, so it is always reachable on phones.
+                // The 找片 entry (movie/tv only: those are the
+                // categories with a landing) sits before the faceted
+                // filter, pinned at the right end of the row instead
+                // of scrolling away with the other chips.
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.explore_outlined, size: 18),
+                  label: const Text('找片'),
+                  selected: _filter == 'landing',
+                  onSelected: (_) => _selectFilter('landing'),
+                ),
                 const SizedBox(width: 8),
                 ChoiceChip(
                   avatar: const Icon(Icons.tune, size: 18),
@@ -332,6 +341,12 @@ class _BrowsePageState extends State<BrowsePage> {
     if (_filter == 'filter') {
       return FacetedView(
           key: ValueKey(_category),
+          repository: widget.repository,
+          endpoint: _category);
+    }
+    if (_filter == 'landing') {
+      return LandingPage(
+          key: ValueKey('landing-$_category'),
           repository: widget.repository,
           endpoint: _category);
     }

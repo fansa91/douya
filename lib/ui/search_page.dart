@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../api/deep_link.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 import '../models/models.dart';
@@ -100,26 +101,19 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     }
   }
 
-  /// Handles a hot-board deep link: a search link runs the search
-  /// with its keyword (the #...# markers are the topic's own
-  /// delimiters, stripped before searching); a subject link opens
-  /// the subject page. Anything else is ignored (no dead button).
-  /// The full deep-link parser (step 4) takes over these shapes.
+  /// Handles a hot-board deep link through the shared parser: a
+  /// search link runs the search with its keyword; a subject link
+  /// opens the subject page. Anything else is ignored (no dead
+  /// button).
   void _openBoardLink(HotSearchBoardItem item) {
-    final uri = Uri.tryParse(item.uri);
-    if (uri == null) return;
-    if (uri.scheme == 'douban' && uri.path == '/search/result') {
-      final keyword = (uri.queryParameters['q'] ?? '').replaceAll('#', '').trim();
-      if (keyword.isEmpty) return;
-      _controller.text = keyword;
-      _submit(keyword);
-      return;
-    }
-    final match = RegExp(r'^/(movie|tv|book|music)/(\w+)$').firstMatch(uri.path);
-    if (uri.scheme == 'douban' && match != null) {
+    final link = parseDeepLink(item.uri);
+    if (link is SearchLink) {
+      _controller.text = link.keyword;
+      _submit(link.keyword);
+    } else if (link is SubjectLink) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => SubjectPage(repository: widget.repository, type: match.group(1)!, id: match.group(2)!),
+          builder: (context) => SubjectPage(repository: widget.repository, type: link.type, id: link.id),
         ),
       );
     }

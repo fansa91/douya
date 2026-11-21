@@ -90,6 +90,32 @@ void main() {
     });
   });
 
+  group('parseLanding', () {
+    test('parses the movie landing groups from the real response', () {
+      final text = File('test/fixtures/movie_landing.json').readAsStringSync();
+      final groups = RealDoubanRepository.parseLanding(jsonDecode(text));
+      expect(groups.length, 4);
+      expect(groups[0].name, '专题');
+      expect(groups[0].items[0].name, '豆瓣热门');
+      expect(groups[0].items[0].uri, 'douban://douban.com/subject_collection/movie_hot_gaia');
+      expect(groups[1].name, '类型');
+      expect(groups[1].items[0].name, '喜剧');
+    });
+
+    test('parses the tv landing groups from the real response', () {
+      final text = File('test/fixtures/tv_landing.json').readAsStringSync();
+      final groups = RealDoubanRepository.parseLanding(jsonDecode(text));
+      expect(groups.length, 3);
+      expect(groups[2].name, '播出平台');
+      expect(groups[2].items[0].name, '湖南卫视');
+    });
+
+    test('a missing or misshaped response yields an empty list, never a throw', () {
+      expect(RealDoubanRepository.parseLanding({}), isEmpty);
+      expect(RealDoubanRepository.parseLanding('nope'), isEmpty);
+    });
+  });
+
   group('parseRankBoards', () {
     test('parses boards with preview subjects from the real response', () {
       final boards = RealDoubanRepository.parseRankBoards(fixture('rank_boards_tag49.json'));

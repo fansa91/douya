@@ -542,6 +542,36 @@ class RealDoubanRepository implements DoubanRepository {
     return parseHotSearchBoard(data);
   }
 
+  /// Parses the Rexxar /{movie|tv}/landing response ({tags:
+  /// [{name, items}]}) into landing groups. Lenient: a missing or
+  /// misshaped list yields an empty list, never a throw. Fixtures:
+  /// test/fixtures/movie_landing.json and tv_landing.json (real
+  /// responses, 2026-11-21).
+  static List<LandingGroup> parseLanding(dynamic data) {
+    if (data is! Map<String, dynamic>) return const [];
+    final tags = data['tags'];
+    if (tags is! List) return const [];
+    return tags
+        .whereType<Map<String, dynamic>>()
+        .map(LandingGroup.fromJson)
+        .where((group) => group.name.isNotEmpty && group.items.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  Future<List<LandingGroup>> fetchLanding(String type) async {
+    // Rexxar /{movie|tv}/landing (unsigned, guest 200, 2026-11-21).
+    // 5-minute cache: the landing is slow-changing, and the browse
+    // page reads it on every 找片 tap.
+    final data = await _rexxarGet(
+      '$type/landing',
+      {},
+      referer: _mReferer,
+      cacheTtl: const Duration(minutes: 5),
+    );
+    return parseLanding(data);
+  }
+
   @override
   Future<List<Subject>> fetchSearchHots() async {
     // Frodo /search/hots (guest 200, 2026-10-31): subjects[10] are
