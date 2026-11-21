@@ -587,6 +587,97 @@ class HotSearchBoardItem {
   }
 }
 
+/// One category of the group discovery page (Rexxar /group/explore
+/// category_tags module, verified 2026-11-21): 7 items {name, count,
+/// icon_url}. The name carries a "分类_" prefix on some entries
+/// (e.g. "分类_闲趣"); the UI strips it for display. There is no
+/// second hop in the response (no uri), so a category cannot be
+/// opened until its list API is found.
+class GroupCategoryTag {
+  const GroupCategoryTag({required this.name, this.count = 0, this.iconUrl});
+
+  final String name;
+  final int count;
+  final String? iconUrl;
+
+  factory GroupCategoryTag.fromJson(Map<String, dynamic> json) {
+    return GroupCategoryTag(
+      name: (json['name'] as String?) ?? '',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      iconUrl: (json['icon_url'] as String?) ?? (json['iconUrl'] as String?),
+    );
+  }
+}
+
+/// One themed set of groups (Rexxar /group/explore groups_sets
+/// module): {title, is_featured, groups}. The groups are full group
+/// objects; the set itself has no uri, so it renders as a horizontal
+/// card row, not as a page of its own.
+class GroupsSet {
+  const GroupsSet({required this.title, this.isFeatured = false, this.groups = const []});
+
+  final String title;
+  final bool isFeatured;
+  final List<SearchGroup> groups;
+
+  factory GroupsSet.fromJson(Map<String, dynamic> json) {
+    final raw = json['groups'];
+    return GroupsSet(
+      title: (json['title'] as String?) ?? '',
+      isFeatured: json['is_featured'] as bool? ?? false,
+      groups: raw is List
+          ? raw.whereType<Map<String, dynamic>>().map(SearchGroup.fromJson).toList()
+          : const [],
+    );
+  }
+}
+
+/// One entry of the "更多小组" list (Rexxar /group/explore groups
+/// module): {group, topics, source}. `topics` are the group's hot
+/// topics (kept for a preview; the card shows the member count, like
+/// the hot list); `source` is why the server picked it (e.g. "hot").
+/// The module pages with start/count and a total, but pages overlap,
+/// so callers dedupe by group id.
+class RecommendedGroup {
+  const RecommendedGroup({required this.group, this.topics = const [], this.source = ''});
+
+  final SearchGroup group;
+  final List<GroupTopic> topics;
+  final String source;
+
+  factory RecommendedGroup.fromJson(Map<String, dynamic> json) {
+    final group = json['group'];
+    final rawTopics = json['topics'];
+    return RecommendedGroup(
+      group: group is Map<String, dynamic> ? SearchGroup.fromJson(group) : const SearchGroup(id: '', name: ''),
+      topics: rawTopics is List
+          ? rawTopics.whereType<Map<String, dynamic>>().map(GroupTopic.fromJson).toList()
+          : const [],
+      source: (json['source'] as String?) ?? '',
+    );
+  }
+}
+
+/// The whole /group/explore response parsed into its four modules
+/// (verified 2026-11-21). One response is one snapshot: the category
+/// order rotates and the sets change between requests, so the UI
+/// reads everything from a single fetch, never two.
+class GroupExplore {
+  const GroupExplore({
+    this.hotGroups = const [],
+    this.categoryTags = const [],
+    this.groupsSets = const [],
+    this.recommendedGroups = const [],
+    this.recommendedTotal = 0,
+  });
+
+  final List<SearchGroup> hotGroups;
+  final List<GroupCategoryTag> categoryTags;
+  final List<GroupsSet> groupsSets;
+  final List<RecommendedGroup> recommendedGroups;
+  final int recommendedTotal;
+}
+
 class SearchGroupResult {
   const SearchGroupResult({this.groups = const [], this.topics = const []});
 

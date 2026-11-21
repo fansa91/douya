@@ -1025,6 +1025,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('小组'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('热门榜'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('后会友期').first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -1144,6 +1146,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('小组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('热门榜'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('后会友期').first);
     await tester.pumpAndSettle();
@@ -1485,6 +1489,31 @@ void main() {
     expect(find.text('查看全部（12 条）'), findsNothing);
   });
 
+  // Step 3: the group page opens on 发现 with the "更多小组" grid,
+  // and 加载更多 appends the next page (deduped by group id).
+  testWidgets('group page discover tab loads more groups', (tester) async {
+    await _pumpPage(tester, const GroupPage(repository: FakeDoubanRepository()), const Size(390, 800));
+    expect(find.text('发现'), findsOneWidget);
+    expect(find.text('更多小组一'), findsOneWidget);
+    expect(find.text('更多小组二'), findsOneWidget);
+    expect(find.text('更多小组三'), findsNothing);
+    expect(find.text('已加载 2 / 3'), findsOneWidget);
+    await tester.tap(find.text('加载更多'));
+    await tester.pumpAndSettle();
+    expect(find.text('更多小组三'), findsOneWidget);
+    expect(find.text('已加载 3 / 3'), findsOneWidget);
+    expect(find.text('已全部加载'), findsOneWidget);
+  });
+
+  // Step 3: the 热门榜 segment still shows the hot groups.
+  testWidgets('group page hot segment shows hot groups', (tester) async {
+    await _pumpPage(tester, const GroupPage(repository: FakeDoubanRepository()), const Size(390, 800));
+    await tester.tap(find.text('热门榜'));
+    await tester.pumpAndSettle();
+    expect(find.text('后会友期'), findsOneWidget);
+    expect(find.text('更多小组一'), findsNothing);
+  });
+
   // Item 3: a long swipe down dismisses the preview; a short slow
   // drag snaps back and the preview stays. These tests pump manually
   // instead of pumpAndSettle: the preview's image never resolves in
@@ -1571,8 +1600,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('热门'), findsOneWidget);
+    expect(find.text('发现'), findsOneWidget);
+    expect(find.text('热门榜'), findsOneWidget);
     expect(find.text('已收藏'), findsOneWidget);
+    expect(find.text('更多小组一'), findsOneWidget);
+    await tester.tap(find.text('热门榜'));
+    await tester.pumpAndSettle();
     expect(find.text('后会友期'), findsOneWidget);
     await tester.tap(find.text('已收藏'));
     await tester.pumpAndSettle();

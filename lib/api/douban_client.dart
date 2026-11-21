@@ -729,6 +729,104 @@ class RealDoubanRepository implements DoubanRepository {
     return parseHotGroups(data);
   }
 
+  /// Parses one groups module (the "更多小组" list) into its entries
+  /// plus the API's total. Entries without a usable group are
+  /// dropped. Fixture: test/fixtures/group_explore.json (real
+  /// response, 2026-11-21).
+  static RecommendedGroupsResult _parseGroupsModule(Map<String, dynamic> module) {
+    final groups = _parseList(module['groups'], RecommendedGroup.fromJson)
+        .where((entry) => entry.group.id.isNotEmpty && entry.group.name.isNotEmpty)
+        .toList();
+    return RecommendedGroupsResult(
+      groups: groups,
+      total: (module['total'] as num?)?.toInt() ?? groups.length,
+    );
+  }
+
+  /// Parses the whole Rexxar /group/explore response into its four
+  /// modules. Lenient: a missing or misshaped feed yields an empty
+  /// GroupExplore, never a throw. Fixture:
+  /// test/fixtures/group_explore.json (real response, 2026-11-21).
+  static GroupExplore parseGroupExplore(Map<String, dynamic> data) {
+    final feed = data['feed'];
+    if (feed is! List) return const GroupExplore();
+    var hot = const <SearchGroup>[];
+    var tags = const <GroupCategoryTag>[];
+    var sets = const <GroupsSet>[];
+    var recommended = const <RecommendedGroup>[];
+    var total = 0;
+    for (final module in feed.whereType<Map<String, dynamic>>()) {
+      switch (module['type']) {
+        case 'top_groups':
+          hot = _parseList(module['groups'], SearchGroup.fromJson)
+              .where((group) => group.id.isNotEmpty && group.name.isNotEmpty)
+              .toList();
+        case 'category_tags':
+          tags = _parseList(module['category_tags'], GroupCategoryTag.fromJson)
+              .where((tag) => tag.name.isNotEmpty)
+              .toList();
+        case 'groups_sets':
+          sets = _parseList(module['groups_sets'], GroupsSet.fromJson)
+              .where((set) => set.title.isNotEmpty)
+              .toList();
+        case 'groups':
+          final result = _parseGroupsModule(module);
+          recommended = result.groups;
+          total = result.total;
+      }
+    }
+    return GroupExplore(
+      hotGroups: hot,
+      categoryTags: tags,
+      groupsSets: sets,
+      recommendedGroups: recommended,
+      recommendedTotal: total,
+    );
+  }
+
+  /// Parses just the groups module of a /group/explore response into
+  /// one page of the "更多小组" list. Lenient: a missing module yields
+  /// an empty page, never a throw.
+  static RecommendedGroupsResult parseRecommendedGroups(Map<String, dynamic> data) {
+    final feed = data['feed'];
+    if (feed is! List) return const RecommendedGroupsResult(groups: [], total: 0);
+    for (final module in feed.whereType<Map<String, dynamic>>()) {
+      if (module['type'] == 'groups') return _parseGroupsModule(module);
+    }
+    return const RecommendedGroupsResult(groups: [], total: 0);
+  }
+
+  @override
+  Future<GroupExplore> fetchGroupExplore() async {
+    // Rexxar /group/explore (unsigned, guest 200, 2026-11-21), the
+    // same request fetchHotGroups makes; the 5-minute cache keeps
+    // both on one response. One response is one snapshot: the
+    // category order rotates and the sets change between requests.
+    final data = await _rexxarGet(
+      'group/explore',
+      {'start': 0, 'count': 20},
+      referer: _mReferer,
+      cacheTtl: const Duration(minutes: 5),
+    );
+    if (data is! Map<String, dynamic>) return const GroupExplore();
+    return parseGroupExplore(data);
+  }
+
+  @override
+  Future<RecommendedGroupsResult> fetchRecommendedGroups({int start = 0, int count = 20}) async {
+    // The groups module of the same /group/explore request, paged by
+    // start/count. Pages overlap (5 of 20 shared between page 1 and
+    // page 2 in the 2026-11-21 probe), so the UI dedupes by group id.
+    final data = await _rexxarGet(
+      'group/explore',
+      {'start': start, 'count': count},
+      referer: _mReferer,
+      cacheTtl: const Duration(minutes: 5),
+    );
+    if (data is! Map<String, dynamic>) return const RecommendedGroupsResult(groups: [], total: 0);
+    return parseRecommendedGroups(data);
+  }
+
   /// Parses the Rexxar /tag/{tagId}/subject_collection_boards
   /// response into boards with their preview subjects. Lenient: a
   /// missing or misshaped list yields an empty list, never a throw.

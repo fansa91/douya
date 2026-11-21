@@ -49,6 +49,47 @@ void main() {
     });
   });
 
+  group('parseGroupExplore', () {
+    test('parses all four modules from the real response', () {
+      final explore = RealDoubanRepository.parseGroupExplore(fixture('group_explore.json'));
+      expect(explore.hotGroups.length, 3);
+      expect(explore.hotGroups[0].name, '哈利波特：魔法觉醒');
+      expect(explore.categoryTags.length, 7);
+      expect(explore.categoryTags[0].name, '分类_兴趣');
+      expect(explore.categoryTags[0].count, 1956);
+      expect(explore.groupsSets.length, 2);
+      expect(explore.groupsSets[0].title, '从今天开始的打卡生活');
+      expect(explore.groupsSets[0].groups.length, 2);
+      expect(explore.recommendedGroups.length, 3);
+      expect(explore.recommendedGroups[0].group.name, '想像Bar');
+      expect(explore.recommendedGroups[0].topics.length, 1);
+      expect(explore.recommendedGroups[0].topics[0].title, isNotEmpty);
+      expect(explore.recommendedGroups[0].source, 'hot');
+      expect(explore.recommendedTotal, 60);
+    });
+
+    test('a missing or misshaped feed yields an empty explore, never a throw', () {
+      final empty = RealDoubanRepository.parseGroupExplore({});
+      expect(empty.hotGroups, isEmpty);
+      expect(empty.categoryTags, isEmpty);
+      expect(empty.groupsSets, isEmpty);
+      expect(empty.recommendedGroups, isEmpty);
+      expect(empty.recommendedTotal, 0);
+    });
+  });
+
+  group('parseRecommendedGroups', () {
+    test('parses one page plus the total from the real response', () {
+      final page = RealDoubanRepository.parseRecommendedGroups(fixture('group_explore.json'));
+      expect(page.groups.length, 3);
+      expect(page.total, 60);
+    });
+
+    test('a missing groups module yields an empty page, never a throw', () {
+      expect(RealDoubanRepository.parseRecommendedGroups({}).groups, isEmpty);
+    });
+  });
+
   group('parseRankBoards', () {
     test('parses boards with preview subjects from the real response', () {
       final boards = RealDoubanRepository.parseRankBoards(fixture('rank_boards_tag49.json'));

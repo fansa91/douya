@@ -11,6 +11,16 @@ class InterestListResult {
   final int total;
 }
 
+/// One page of the "更多小组" list: the entries plus the API's
+/// `total`. Pages overlap, so callers dedupe by group id and stop
+/// when the loaded ids reach the total or a page adds nothing new.
+class RecommendedGroupsResult {
+  const RecommendedGroupsResult({required this.groups, required this.total});
+
+  final List<RecommendedGroup> groups;
+  final int total;
+}
+
 /// One page of a topic's replies: the items plus the API's `total`.
 /// Same shape as InterestListResult, for the comments endpoint
 /// (verified 2026-11-21: start/count paging works, total present).
@@ -98,7 +108,23 @@ abstract class DoubanRepository {
   /// /group/recommend_feed_groups, which returns {"items":[]} for guests.
   /// Discussion featured (讨论精选) is deliberately NOT here: it has
   /// no JSON API, only server-rendered web HTML, and is shelved.
+  /// The 5-minute cache shares the response with fetchGroupExplore.
   Future<List<SearchGroup>> fetchHotGroups();
+
+  /// Group discovery: Rexxar /group/explore, all four modules at
+  /// once (top_groups, category_tags, groups_sets, groups/更多小组）,
+  /// guest-usable without a signature (verified 2026-11-21). One
+  /// response is one snapshot; the 5-minute cache keeps this and
+  /// fetchHotGroups on the same request. Categories and sets have no
+  /// second hop in the response (no uri), so the UI renders only the
+  /// "更多小组" list until their list API is found.
+  Future<GroupExplore> fetchGroupExplore();
+
+  /// One page of the "更多小组" list (the groups module of
+  /// /group/explore, start/count + total, verified 2026-11-21).
+  /// Pages overlap, so callers dedupe by group id and stop when the
+  /// loaded ids reach the total or a page adds nothing new.
+  Future<RecommendedGroupsResult> fetchRecommendedGroups({int start = 0, int count = 20});
 
   /// Ranking boards for one tag category (numeric tag id, see
   /// RankBoard): Rexxar /tag/{tagId}/subject_collection_boards,

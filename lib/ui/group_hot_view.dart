@@ -7,10 +7,13 @@ import '../data/repository.dart';
 import '../models/models.dart';
 import 'widgets.dart';
 
-/// The group tab: 热门 | 已收藏, plus an overflow menu to open a
-/// group by id (the old id input sat at the top of the hot list; it
+/// The group tab: 发现 | 热门榜 | 已收藏, plus an overflow menu to open
+/// a group by id (the old id input sat at the top of the hot list; it
 /// now lives behind ⋮). Tapping a group pushes the detail page;
-/// this view owns no detail state.
+/// this view owns no detail state. The 发现 tab shows only the
+/// "更多小组" list: the category tags and themed sets have no second
+/// hop in the /group/explore response, so they stay hidden until
+/// their list API is found.
 class GroupHotView extends StatefulWidget {
   const GroupHotView({super.key, required this.repository, required this.onOpenGroup});
 
@@ -25,16 +28,27 @@ class GroupHotView extends StatefulWidget {
 }
 
 class _GroupHotViewState extends State<GroupHotView> {
-  String _segment = 'hot';
+  String _segment = 'discover';
   List<SearchGroup> _hotGroups = [];
   bool _hotLoading = true;
   String? _hotError;
+
+  /// "更多小组" list (discover tab): paged, deduped by group id.
+  List<RecommendedGroup> _recommended = [];
+  int _recommendedTotal = 0;
+  bool _discoverLoading = true;
+  bool _discoverLoadingMore = false;
+  bool _discoverExhausted = false;
+  bool _discoverMoreFailed = false;
+  String? _discoverError;
+
   final _idController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadHotGroups();
+    _loadDiscover();
   }
 
   @override
@@ -55,6 +69,53 @@ class _GroupHotViewState extends State<GroupHotView> {
       if (mounted) setState(() => _hotError = '$e');
     } finally {
       if (mounted) setState(() => _hotLoading = false);
+    }
+  }
+
+  Future<void> _loadDiscover() async {
+    setState(() {
+      _discoverLoading = true;
+      _discoverError = null;
+    });
+    try {
+      // One /group/explore request; the hot tab's fetchHotGroups
+      // shares the cached response.
+      final explore = await widget.repository.fetchGroupExplore();
+      if (mounted) {
+        setState(() {
+          _recommended = explore.recommendedGroups;
+          _recommendedTotal = explore.recommendedTotal;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _discoverError = '$e');
+    } finally {
+      if (mounted) setState(() => _discoverLoading = false);
+    }
+  }
+
+  Future<void> _loadMoreDiscover() async {
+    if (_discoverLoadingMore) return;
+    setState(() {
+      _discoverLoadingMore = true;
+      _discoverMoreFailed = false;
+    });
+    try {
+      final page = await widget.repository.fetchRecommendedGroups(start: _recommended.length, count: 20);
+      if (mounted) {
+        setState(() {
+          final seen = _recommended.map((e) => e.group.id).toSet();
+          final fresh = page.groups.where((e) => seen.add(e.group.id)).toList();
+          if (fresh.isEmpty) _discoverExhausted = true;
+          _recommended = [..._recommended, ...fresh];
+          _recommendedTotal = page.total;
+        });
+      }
+    } catch (_) {
+      // Load-more failure is non-fatal: the footer retry stays.
+      if (mounted) setState(() => _discoverMoreFailed = true);
+    } finally {
+      if (mounted) setState(() => _discoverLoadingMore = false);
     }
   }
 
@@ -96,15 +157,23 @@ class _GroupHotViewState extends State<GroupHotView> {
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
           child: Row(
             children: [
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'hot', label: Text('热门')),
-                  ButtonSegment(value: 'favorites', label: Text('已收藏')),
-                ],
-                selected: {_segment},
-                onSelectionChanged: (selection) => setState(() => _segment = selection.first),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'discover', label: Text('发现')),
+                        ButtonSegment(value: 'hot', label: Text('热门榜')),
+                        ButtonSegment(value: 'favorites', label: Text('已收藏')),
+                      ],
+                      selected: {_segment},
+                      onSelectionChanged: (selection) => setState(() => _segment = selection.first),
+                    ),
+                  ),
+                ),
               ),
-              const Spacer(),
               IconButton(
                 icon: const Icon(Icons.more_vert),
                 tooltip: '按 id 打开',
@@ -114,9 +183,74 @@ class _GroupHotViewState extends State<GroupHotView> {
           ),
         ),
         Expanded(
-          child: _segment == 'hot' ? _hotGrid() : _favoritesGrid(),
+          child: _segment == 'discover'
+              ? _discoverView()
+              : _segment == 'hot'
+                  ? _hotGrid()
+                  : _favoritesGrid(),
         ),
       ],
+    );
+  }
+
+  /// Discover tab: the "更多小组" paged grid, reusing the hot grid's
+  /// cards (tap opens the detail page, where the favorite star
+  /// lives). Categories and themed sets are not rendered: their
+  /// second hop is unconfirmed, so only this list ships.
+  Widget _discoverView() {
+    if (_discoverLoading) return const LoadingList();
+    if (_discoverError != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EmptyState(message: '加载失败：$_discoverError'),
+            FilledButton(onPressed: _loadDiscover, child: const Text('重试')),
+          ],
+        ),
+      );
+    }
+    if (_recommended.isEmpty) return const EmptyState(message: '暂无更多小组');
+    return Column(
+      children: [
+        Expanded(
+          child: _groupGrid(
+            itemCount: _recommended.length,
+            itemBuilder: (_, i) {
+              final group = _recommended[i].group;
+              return _groupCard(
+                avatar: group.avatar,
+                name: group.name,
+                subtitle: '${group.memberCount} 个成员',
+                onTap: () => widget.onOpenGroup(group.id, group.name),
+              );
+            },
+          ),
+        ),
+        _discoverFooter(),
+      ],
+    );
+  }
+
+  Widget _discoverFooter() {
+    final hasMore = !_discoverExhausted && _recommended.length < _recommendedTotal;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('已加载 ${_recommended.length} / $_recommendedTotal', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          if (_discoverLoadingMore)
+            const CircularProgressIndicator()
+          else if (_discoverMoreFailed)
+            FilledButton(onPressed: _loadMoreDiscover, child: const Text('加载失败，重试'))
+          else if (hasMore)
+            FilledButton(onPressed: _loadMoreDiscover, child: const Text('加载更多'))
+          else
+            const Text('已全部加载'),
+        ],
+      ),
     );
   }
 

@@ -193,6 +193,52 @@ Future<List<SearchGroup>> fetchHotGroups() async => const [
     ];
 
 @override
+Future<GroupExplore> fetchGroupExplore() async => const GroupExplore(
+  hotGroups: [
+    SearchGroup(id: '762280', name: '后会友期', memberCount: 8705),
+    SearchGroup(id: '48007', name: '肖申克的救赎', memberCount: 1494),
+  ],
+  categoryTags: [
+    GroupCategoryTag(name: '分类_闲趣', count: 1833),
+    GroupCategoryTag(name: '追剧', count: 5590),
+  ],
+  groupsSets: [
+    GroupsSet(
+      title: '用镜头表达',
+      isFeatured: true,
+      groups: [SearchGroup(id: '762280', name: '后会友期', memberCount: 8705)],
+    ),
+  ],
+  recommendedGroups: [
+    RecommendedGroup(
+      group: SearchGroup(id: '111', name: '更多小组一', memberCount: 1000),
+      topics: [GroupTopic(id: '1', title: '示例话题一', commentsCount: 12)],
+      source: 'hot',
+    ),
+    RecommendedGroup(
+      group: SearchGroup(id: '222', name: '更多小组二', memberCount: 2000),
+      topics: [GroupTopic(id: '2', title: '示例话题二', commentsCount: 34)],
+      source: 'hot',
+    ),
+  ],
+  // Page 1 holds 2 of 3; the third arrives through
+  // fetchRecommendedGroups, so the UI's load-more is exercised.
+  recommendedTotal: 3,
+);
+
+@override
+Future<RecommendedGroupsResult> fetchRecommendedGroups({int start = 0, int count = 20}) async {
+  const all = [
+    RecommendedGroup(group: SearchGroup(id: '111', name: '更多小组一', memberCount: 1000), source: 'hot'),
+    RecommendedGroup(group: SearchGroup(id: '222', name: '更多小组二', memberCount: 2000), source: 'hot'),
+    RecommendedGroup(group: SearchGroup(id: '333', name: '更多小组三', memberCount: 3000), source: 'hot'),
+  ];
+  if (start >= all.length) return const RecommendedGroupsResult(groups: [], total: 3);
+  final end = (start + count).clamp(0, all.length);
+  return RecommendedGroupsResult(groups: all.sublist(start, end), total: 3);
+}
+
+@override
 Future<List<RankBoard>> fetchRankBoards(String tagId) async {
   // Only the one board whose id + subject count were verified by
   // probing (6月豆瓣电影口碑榜Top20, id 1818, 159 subjects, tag 49).
